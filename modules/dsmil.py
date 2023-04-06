@@ -3,7 +3,7 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-from .swin import SwinEncoder
+from .rrt import RRTEncoder
 # import sys
 # sys.stdout = open('data1.log', mode='w', encoding='utf-8')
 
@@ -46,7 +46,7 @@ class FCLayer(nn.Module):
 
         if dropout:
             self.embed += [nn.Dropout(0.25)]
-        self.embed.append(SwinEncoder(attn='swin',pool='none'))
+        self.embed.append(RRTEncoder(attn='rrt',pool='none'))
 
         self.embed = nn.Sequential(*self.embed)
         self.fc = nn.Sequential(
@@ -137,7 +137,7 @@ class MILNet(nn.Module):
 
     def forward(self, x):
         feats, classes = self.i_classifier(x.squeeze()) # feats->N x D
-        # feats, classes = self.i_classifier(x) # feats->N x D 添加swin需要b*n*c的尺度
+        # feats, classes = self.i_classifier(x) # feats->N x D 添加rrt需要b*n*c的尺度
         prediction_bag, A, B = self.b_classifier(feats, classes)
         max_prediction, _ = torch.max(classes, 0) 
         

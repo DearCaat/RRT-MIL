@@ -3,8 +3,8 @@ import torch
 import torch.nn as nn
 import sys
 sys.path.append('..')
-# sys.path.append('/home/xxx/code/mil/cvpr2023/modules/swin')
-#from modules.swin import SwinEncoder
+# sys.path.append('/home/xxx/code/mil/cvpr2023/modules/rrt')
+#from modules.rrt import RRTEncoder
 
 def initialize_weights(module):
     for m in module.modules():
@@ -73,7 +73,7 @@ class DimReduction(nn.Module):
         super(DimReduction, self).__init__()
         self.fc1 = nn.Linear(n_channels, m_dim, bias=False)
         # 添加自己的re-embedding模块
-        #self.swin = SwinEncoder(attn='swin',pool='none',window_size=0)
+        #self.rrt = RRTEncoder(attn='rrt',pool='none',region_size=0)
         self.relu1 = nn.ReLU(inplace=True) if act.lower() == 'relu' else nn.GELU()
         self.numRes = numLayer_Res
         self.drop = nn.Dropout(0.25)
@@ -102,7 +102,7 @@ class DimReduction(nn.Module):
             x = self.drop(x)
         if self.numRes > 0:
             x = self.resBlocks(x)
-        # x = self.swin(x)
+        # x = self.rrt(x)
 
         return x
 if __name__ == "__main__":

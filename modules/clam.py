@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from .topk.svm import SmoothTop1SVM
-from .swin import SwinEncoder
+from .rrt import RRTEncoder
 
 def initialize_weights(module):
 	for m in module.modules():
@@ -110,7 +110,7 @@ args:
 
 class CLAM_SB(nn.Module):
     def __init__(self, gate = True, size_arg = "small", dropout = 0., k_sample=8, n_classes=2,
-        instance_loss_fn=SmoothTop1SVM(2), subtyping=False,test=False,act='relu',n_robust=0,swin=False):
+        instance_loss_fn=SmoothTop1SVM(2), subtyping=False,test=False,act='relu',n_robust=0,rrt=False):
         super(CLAM_SB, self).__init__()
         self.size_dict = {"small": [1024, 512, 256], "big": [1024, 512, 384],"hipt": [192, 512, 256]}
         size = self.size_dict[size_arg]
@@ -125,8 +125,8 @@ class CLAM_SB(nn.Module):
 
         if dropout != 0.:
             fc.append(nn.Dropout(dropout))
-        if swin:
-            fc.append(SwinEncoder(attn='swin',pool='none'))
+        if rrt:
+            fc.append(RRTEncoder(attn='rrt',pool='none'))
         if gate:
             attention_net = Attn_Net_Gated(L = size[1], D = size[2], dropout = dropout, n_classes = 1)
         else:
@@ -268,7 +268,7 @@ class CLAM_SB(nn.Module):
 
 class CLAM_MB(CLAM_SB):
     def __init__(self, gate = True, size_arg = "small", dropout = 0., k_sample=8, n_classes=2,
-        instance_loss_fn=SmoothTop1SVM(2), subtyping=False,act='relu',swin=False):
+        instance_loss_fn=SmoothTop1SVM(2), subtyping=False,act='relu',rrt=False):
         nn.Module.__init__(self)
         self.size_dict = {"small": [1024, 512, 256], "big": [1024, 512, 384]}
         size = self.size_dict[size_arg]
@@ -284,8 +284,8 @@ class CLAM_MB(CLAM_SB):
         if dropout != 0.:
             fc.append(nn.Dropout(dropout))
         
-        if swin:
-            fc.append(SwinEncoder(attn='swin',pool='none',n_heads=8,region_num=8))
+        if rrt:
+            fc.append(RRTEncoder(attn='rrt',pool='none',n_heads=8,region_num=8))
 
         if gate:
             attention_net = Attn_Net_Gated(L = size[1], D = size[2], dropout = dropout, n_classes = n_classes)

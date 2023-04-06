@@ -815,7 +815,7 @@ if __name__ == "__main__":
     parser.add_argument('--init_type', default='none', type=str, help='[none,fc,all]')
     parser.add_argument('--initfc', default='./debug_log', type=str, help='output log filepath')
     parser.add_argument('--always_test', action='store_true', help='lr_scheduler_update_per_iter')
-    parser.add_argument('--swin', action='store_true', help='Automatic Mixed Precision Training')
+    parser.add_argument('--rrt', action='store_true', help='Automatic Mixed Precision Training')
     parser.add_argument('--no_log', action='store_true', help='Automatic Mixed Precision Training')
     parser.add_argument('--pict', action='store_true', help='Automatic Mixed Precision Training')
     # Our
@@ -848,10 +848,10 @@ if __name__ == "__main__":
     # parser.add_argument('--region_num', default=8, type=int, help='position of pos embed [-1,0]')
     # parser.add_argument('--reduce_ratio', default=0, type=int, help='cl loss alpha')
     # parser.add_argument('--mlp_ratio', default=4., type=int, help='cl loss alpha')
-    # parser.add_argument('--window_size', default=0, type=int, help='position of pos embed [-1,0]')
+    # parser.add_argument('--region_size', default=0, type=int, help='position of pos embed [-1,0]')
     # parser.add_argument('--rpe', action='store_true', help='lr_scheduler_update_per_iter')
-    # parser.add_argument('--min_win_num', default=0, type=int, help='position of pos embed [-1,0]')
-    # parser.add_argument('--min_win_ratio', default=0., type=float, help='position of pos embed [-1,0]')
+    # parser.add_argument('--min_region_num', default=0, type=int, help='position of pos embed [-1,0]')
+    # parser.add_argument('--min_region_ratio', default=0., type=float, help='position of pos embed [-1,0]')
     # parser.add_argument('--qkv_bias', action='store_false', help='lr_scheduler_update_per_iter')
     # parser.add_argument('--trans_conv_bias', action='store_true', help='lr_scheduler_update_per_iter')
     # parser.add_argument('--trans_conv_2d', action='store_true', help='lr_scheduler_update_per_iter')
@@ -863,7 +863,7 @@ if __name__ == "__main__":
     # if params.all_memo:
     #     cuda_device = os.environ["CUDA_VISIBLE_DEVICES"]
     #     occumpy_mem(cuda_device)
-    if params.swin:
+    if params.rrt:
         trainer.step()
     main(params=params)
 

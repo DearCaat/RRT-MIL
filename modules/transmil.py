@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from .nystrom_attention import NystromAttention
-from .swin import SwinEncoder
+from .rrt import RRTEncoder
 
 def initialize_weights(module):
     for m in module.modules():
@@ -79,7 +79,7 @@ class TransMIL(nn.Module):
         if dropout:
             self._fc1 += [nn.Dropout(0.25)]
 
-        #self._fc1 += [SwinEncoder(attn='swin',pool='none',n_heads=2,trans_conv=False)]
+        #self._fc1 += [RRTEncoder(attn='rrt',pool='none',n_heads=2,trans_conv=False)]
         
         self._fc1 = nn.Sequential(*self._fc1)
         

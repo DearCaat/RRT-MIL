@@ -5,10 +5,9 @@ from torch import nn
 from einops import repeat
 import torchvision.models as models
 from modules.emb_position import *
-from modules.transformer import *
 from modules.mlp import *
 from modules.datten import *
-from modules.swin_atten import *
+from modules.rmsa import *
 import torch.nn.functional as F
 from modules.translayer import *
 from modules.datten import DAttention
@@ -35,12 +34,12 @@ def initialize_weights(module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
-class SwinEncoder(nn.Module):
+class RRTEncoder(nn.Module):
     '''
     learnable mask token
     '''
-    def __init__(self,mlp_dim=512,pos_pos=0,pos='none',peg_k=7,attn='ntrans',region_num=8,drop_out=0.1,n_layers=1,n_heads=8,multi_scale=False,drop_path=0.1,pool='attn',da_act='tanh',reduce_ratio=0,ffn=False,ffn_act='gelu',mlp_ratio=4.,da_gated=False,da_bias=False,da_dropout=False,trans_dim=64,n_cycle=1,trans_conv=True,rpe=False,window_size=0,min_win_num=0,min_win_ratio=0,qkv_bias=True,shift_size=False,peg_bias=True,peg_1d=False,**kwargs):
-        super(SwinEncoder, self).__init__()
+    def __init__(self,mlp_dim=512,pos_pos=0,pos='none',peg_k=7,attn='ntrans',region_num=8,drop_out=0.1,n_layers=1,n_heads=8,multi_scale=False,drop_path=0.1,pool='attn',da_act='tanh',reduce_ratio=0,ffn=False,ffn_act='gelu',mlp_ratio=4.,da_gated=False,da_bias=False,da_dropout=False,trans_dim=64,n_cycle=1,trans_conv=True,rpe=False,region_size=0,min_region_num=0,min_region_ratio=0,qkv_bias=True,shift_size=False,peg_bias=True,peg_1d=False,**kwargs):
+        super(RRTEncoder, self).__init__()
         
         # 不需要降维
         if reduce_ratio == 0:
@@ -66,7 +65,7 @@ class SwinEncoder(nn.Module):
         self.norm = nn.LayerNorm(self.final_dim)
 
         # if attn == 'trans':
-        self.layer1 = TransLayer1(dim=mlp_dim,head=n_heads,drop_out=drop_out,drop_path=drop_path,need_down=multi_scale,need_reduce=reduce_ratio!=0,down_ratio=2**reduce_ratio,ffn=ffn,ffn_act=ffn_act,mlp_ratio=mlp_ratio,trans_dim=trans_dim,n_cycle=n_cycle,attn=attn,n_window=region_num,trans_conv=trans_conv,rpe=rpe,window_size=window_size,min_win_num=min_win_num,min_win_ratio=min_win_ratio,qkv_bias=qkv_bias,shift_size=shift_size,**kwargs)
+        self.layer1 = TransLayer1(dim=mlp_dim,head=n_heads,drop_out=drop_out,drop_path=drop_path,need_down=multi_scale,need_reduce=reduce_ratio!=0,down_ratio=2**reduce_ratio,ffn=ffn,ffn_act=ffn_act,mlp_ratio=mlp_ratio,trans_dim=trans_dim,n_cycle=n_cycle,attn=attn,n_region=region_num,trans_conv=trans_conv,rpe=rpe,region_size=region_size,min_region_num=min_region_num,min_region_ratio=min_region_ratio,qkv_bias=qkv_bias,shift_size=shift_size,**kwargs)
         #self.layer2 = TransLayer1(dim=mlp_dim,head=n_heads,drop_out=drop_out,drop_path=drop_path)
         if reduce_ratio > 0:
             mlp_dim = mlp_dim // (2**reduce_ratio)
@@ -77,10 +76,10 @@ class SwinEncoder(nn.Module):
         if n_layers >= 2:
             self.layers = []
             for i in range(n_layers-2):
-                self.layers += [TransLayer1(dim=mlp_dim,head=n_heads,drop_out=drop_out,drop_path=drop_path,need_down=multi_scale,ffn=ffn,ffn_act=ffn_act,mlp_ratio=mlp_ratio,trans_dim=trans_dim,n_cycle=n_cycle,attn=attn,n_window=region_num,trans_conv=trans_conv,rpe=rpe,window_size=window_size,min_win_num=min_win_num,min_win_ratio=min_win_ratio,qkv_bias=qkv_bias) ]
+                self.layers += [TransLayer1(dim=mlp_dim,head=n_heads,drop_out=drop_out,drop_path=drop_path,need_down=multi_scale,ffn=ffn,ffn_act=ffn_act,mlp_ratio=mlp_ratio,trans_dim=trans_dim,n_cycle=n_cycle,attn=attn,n_region=region_num,trans_conv=trans_conv,rpe=rpe,region_size=region_size,min_region_num=min_region_num,min_region_ratio=min_region_ratio,qkv_bias=qkv_bias) ]
                 if multi_scale:
                     mlp_dim = mlp_dim*2
-            self.layers += [TransLayer1(dim=mlp_dim,head=n_heads,drop_out=drop_out,drop_path=drop_path,ffn=ffn,ffn_act=ffn_act,mlp_ratio=mlp_ratio,trans_dim=trans_dim,n_cycle=n_cycle,attn=attn,n_window=region_num,trans_conv=trans_conv,rpe=rpe,window_size=window_size,min_win_num=min_win_num,min_win_ratio=min_win_ratio,qkv_bias=qkv_bias,shift_size=shift_size,**kwargs)]
+            self.layers += [TransLayer1(dim=mlp_dim,head=n_heads,drop_out=drop_out,drop_path=drop_path,ffn=ffn,ffn_act=ffn_act,mlp_ratio=mlp_ratio,trans_dim=trans_dim,n_cycle=n_cycle,attn=attn,n_region=region_num,trans_conv=trans_conv,rpe=rpe,region_size=region_size,min_region_num=min_region_num,min_region_ratio=min_region_ratio,qkv_bias=qkv_bias,shift_size=shift_size,**kwargs)]
             self.layers = nn.Sequential(*self.layers)
         else:
             self.layers = nn.Identity()
@@ -167,9 +166,9 @@ class SwinEncoder(nn.Module):
         else:
             return logits
 
-class Swin(nn.Module):
-    def __init__(self, mlp_dim=512,act='relu',n_classes=2,dropout=0.25,pos_pos=0,n_robust=0,pos='ppeg',peg_k=7,attn='trans',pool='attn',region_num=8,n_layers=2,n_heads=8,multi_scale=False,drop_path=0.,da_act='relu',trans_dropout=0.1,ffn=False,ffn_act='gelu',mlp_ratio=4.,da_gated=False,da_bias=False,da_dropout=False,trans_dim=64,n_cycle=1,trans_conv=False,min_win_num=0,qkv_bias=True,shift_size=False,**kwargs):
-        super(Swin, self).__init__()
+class RRT(nn.Module):
+    def __init__(self, mlp_dim=512,act='relu',n_classes=2,dropout=0.25,pos_pos=0,n_robust=0,pos='ppeg',peg_k=7,attn='trans',pool='attn',region_num=8,n_layers=2,n_heads=8,multi_scale=False,drop_path=0.,da_act='relu',trans_dropout=0.1,ffn=False,ffn_act='gelu',mlp_ratio=4.,da_gated=False,da_bias=False,da_dropout=False,trans_dim=64,n_cycle=1,trans_conv=False,min_region_num=0,qkv_bias=True,shift_size=False,**kwargs):
+        super(RRT, self).__init__()
 
         self.patch_to_emb = [nn.Linear(1024, 512)]
 
@@ -182,7 +181,7 @@ class Swin(nn.Module):
 
         self.patch_to_emb = nn.Sequential(*self.patch_to_emb)
 
-        self.online_encoder = SwinEncoder(mlp_dim=mlp_dim,pos_pos=pos_pos,pos=pos,peg_k=peg_k,attn=attn,region_num=region_num,n_layers=n_layers,n_heads=n_heads,multi_scale=multi_scale,drop_path=drop_path,pool=pool,da_act=da_act,drop_out=trans_dropout,ffn=ffn,ffn_act=ffn_act,mlp_ratio=mlp_ratio,da_gated=da_gated,da_bias=da_bias,da_dropout=da_dropout,trans_dim=trans_dim,n_cycle=n_cycle,trans_conv=trans_conv,min_win_num=min_win_num,min_win_ratio=min_win_ratio,qkv_bias=qkv_bias,shift_size=shift_size,**kwargs)
+        self.online_encoder = RRTEncoder(mlp_dim=mlp_dim,pos_pos=pos_pos,pos=pos,peg_k=peg_k,attn=attn,region_num=region_num,n_layers=n_layers,n_heads=n_heads,multi_scale=multi_scale,drop_path=drop_path,pool=pool,da_act=da_act,drop_out=trans_dropout,ffn=ffn,ffn_act=ffn_act,mlp_ratio=mlp_ratio,da_gated=da_gated,da_bias=da_bias,da_dropout=da_dropout,trans_dim=trans_dim,n_cycle=n_cycle,trans_conv=trans_conv,min_region_num=min_region_num,min_region_ratio=min_region_ratio,qkv_bias=qkv_bias,shift_size=shift_size,**kwargs)
 
         self.predictor = nn.Linear(self.online_encoder.final_dim,n_classes)
 

@@ -8,7 +8,7 @@ from dataloader import *
 from torch.utils.data import DataLoader,Sampler, WeightedRandomSampler, RandomSampler
 import sys, argparse, os, copy, itertools
 import torchvision.transforms.functional as VF
-from modules import attmil,clam,contrastive1,dsmil,transmil,mean_max,swin
+from modules import attmil,clam,contrastive1,dsmil,transmil,mean_max,rrt
 # try:
    
 # except:
@@ -48,7 +48,6 @@ def main(args):
         p = p[index]
         l = l[index]
 
-    # 当cv_fold == 1时，不使用交叉验证
     if args.cv_fold > 1:
         train_p, train_l, test_p, test_l,val_p,val_l = get_kflod(args.cv_fold, p, l,args.val_ratio)
 
@@ -121,9 +120,6 @@ def one_fold(args,k,ckc_metric,train_p, train_l, test_p, test_l,val_p,val_l):
             val_set = C16Dataset(val_p[k],val_l[k],root=args.dataset_root,persistence=args.persistence,keep_same_psize=args.same_psize)
         else:
             val_set = test_set
-        # _f = open('c16_dataset.txt','a',encoding='utf-8')
-        
-        # return [acs,pre,rec,fs,auc,te_auc,te_fs]
 
     elif args.datasets.lower() == 'tcga':
         
@@ -143,62 +139,46 @@ def one_fold(args,k,ckc_metric,train_p, train_l, test_p, test_l,val_p,val_l):
         train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,generator=generator)
     else:
         train_loader = DataLoader(train_set, batch_size=args.batch_size, sampler=RandomSampler(train_set), num_workers=args.num_workers)
-        #train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers)
 
     val_loader = DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
     test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers)
 
-    mm_sche = None
-    if not args.teacher_init.endswith('.pt'):
-        _str = 'fold_{fold}_model_best_auc.pt'.format(fold=k)
-        _teacher_init = os.path.join(args.teacher_init,_str)
-    else:
-        _teacher_init =args.teacher_init
     # bulid networks
-    if args.model == 'mhim':
-        if args.mrh_sche:
-            mrh_sche = cosine_scheduler(args.mask_ratio_h,0.,epochs=args.num_epoch,niter_per_ep=len(train_loader))
-        else:
-            mrh_sche = None
-
+    if args.model == 'rttmil':
         model_params = {
-            'backbone': args.backbone,
-            'dropout': args.dropout,
-            'mask_ratio' : args.mask_ratio,
             'n_classes': args.n_classes,
-            'pos_pos': args.pos_pos,
-            'cl_loss': args.cl_loss,
-            'teacher_init' : _teacher_init,
-            'temp_t': args.temp_t,
-            'pos': args.pos,
+            'dropout': args.dropout,
             'act': args.act,
-            'attn': args.attn,
-            'pool': args.pool,
             'region_num': args.region_num,
-            'head': args.n_heads,
-            'shuffle_group': args.shuffle_group,
-            'msa_fusion': args.msa_fusion,
-            'mask_ratio_h': args.mask_ratio_h,
-            'mask_ratio_hr': args.mask_ratio_hr,
-            'mask_ratio_l': args.mask_ratio_l,
-            'mrh_sche': mrh_sche,
-            'mrh_type': args.mrh_type,
-            'n_trans_layers': args.n_trans_layers,
-            'da_act': args.da_act,
+            'pos': args.pos,
+            'pos_pos': args.pos_pos,
+            'pool': args.pool,
+            'peg_k': args.peg_k,
             'drop_path': args.drop_path,
-            'trans_drop_out': args.trans_drop_out,
-        }
-        
-        if args.mm_sche:
-            mm_sche = cosine_scheduler(args.mm,args.mm_final,epochs=args.num_epoch,niter_per_ep=len(train_loader),start_warmup_value=1.)
-
-        else:
-            model = contrastive1.CLR(**model_params).to(device)
-            
-    elif args.model == 'pure':
-        args.mask_ratio=0. 
-
-        model = contrastive1.CLR(mask_ratio=args.mask_ratio,n_classes=args.n_classes,mfm_enable=False,pos_pos=args.pos_pos,pos=args.pos,act=args.act,attn=args.attn,pool=args.pool,region_num=args.region_num,head=args.n_heads,n_trans_layers=args.n_trans_layers,da_act=args.da_act,trans_drop_out=args.trans_drop_out,drop_path = args.drop_path,backbone=args.backbone).to(device)
+            'n_layers': args.n_trans_layers,
+            'n_heads': args.n_heads,
+            'attn': args.attn,
+            'da_act': args.da_act,
+            'trans_dropout': args.trans_drop_out,
+            'ffn': args.ffn,
+            'ffn_act': args.ffn_act,
+            'mlp_ratio': args.mlp_ratio,
+            'da_gated': args.da_gated,
+            'da_bias': args.da_bias,
+            'da_dropout': args.da_dropout,
+            'trans_dim': args.trans_dim,
+            'n_cycle': args.n_cycle,
+            'trans_conv': args.trans_conv,
+            'min_region_num': args.min_region_num,
+            'qkv_bias': args.qkv_bias,
+            'conv_k': args.trans_conv_k,
+            'conv_2d': args.trans_conv_2d,
+            'conv_bias': args.trans_conv_bias,
+            'conv_type': args.trans_conv_type,
+            'region_attn': args.region_attn,
+            'peg_1d': args.peg_1d
+         }
+        model = rrt.RRT(**model_params).to(device)
     elif args.model == 'attmil':
         model = attmil.DAttention(n_classes=args.n_classes,dropout=args.dropout,act=args.act).to(device)
     elif args.model == 'gattmil':
@@ -223,77 +203,6 @@ def one_fold(args,k,ckc_metric,train_p, train_l, test_p, test_l,val_p,val_l):
         model = mean_max.MeanMIL(n_classes=args.n_classes,dropout=args.dropout,act=args.act).to(device)
     elif args.model == 'maxmil':
         model = mean_max.MaxMIL(n_classes=args.n_classes,dropout=args.dropout,act=args.act).to(device)
-    elif args.model == 'swin':
-         model_params = {
-            'n_classes': args.n_classes,
-            'dropout': args.dropout,
-            'act': args.act,
-            'region_num': args.region_num,
-            'pos': args.pos,
-            'pos_pos': args.pos_pos,
-            'pool': args.pool,
-            'peg_k': args.peg_k,
-            'drop_path': args.drop_path,
-            'n_layers': args.n_trans_layers,
-            'n_heads': args.n_heads,
-            'attn': args.attn,
-            'da_act': args.da_act,
-            'trans_dropout': args.trans_drop_out,
-            'ffn': args.ffn,
-            'ffn_act': args.ffn_act,
-            'mlp_ratio': args.mlp_ratio,
-            'da_gated': args.da_gated,
-            'da_bias': args.da_bias,
-            'da_dropout': args.da_dropout,
-            'trans_dim': args.trans_dim,
-            'n_cycle': args.n_cycle,
-            'trans_conv': args.trans_conv,
-            'min_win_num': args.min_win_num,
-            'qkv_bias': args.qkv_bias,
-            'conv_k': args.trans_conv_k,
-            'conv_2d': args.trans_conv_2d,
-            'conv_bias': args.trans_conv_bias,
-            'conv_type': args.trans_conv_type,
-            'win_attn': args.win_attn,
-            'peg_1d': args.peg_1d
-         }
-         model = swin.Swin(**model_params).to(device)
-
-    if args.init_stu_type != 'none':
-        if not args.no_log:
-            print('######### Model Initing.....')
-        pre_dict = torch.load(_teacher_init)
-        new_state_dict ={}
-        if args.init_stu_type == 'fc':
-        # only patch_to_emb
-            for _k,v in pre_dict.items():
-                _k = _k.replace('patch_to_emb.','') if 'patch_to_emb' in _k else _k
-                new_state_dict[_k]=v
-            info = model.patch_to_emb.load_state_dict(new_state_dict,strict=False)
-        else:
-        # init all
-            info = model.load_state_dict(pre_dict,strict=False)
-        if not args.no_log:
-            print(info)
-
-    # teacher model
-    if args.model == 'mhim':
-        model_tea = deepcopy(model)
-        if not args.no_tea_init and args.tea_type != 'same':
-            if not args.no_log:
-                print('######### Teacher Initing.....')
-            try:
-                pre_dict = torch.load(_teacher_init)
-                info = model_tea.load_state_dict(pre_dict,strict=False)
-                if not args.no_log:
-                    print(info)
-            except:
-                if not args.no_log:
-                    print('########## Init Error')
-        if args.tea_type == 'same':
-            model_tea = model
-    else:
-        model_tea = None
 
     if args.loss == 'bce':
         criterion = nn.BCEWithLogitsLoss()
@@ -351,33 +260,9 @@ def one_fold(args,k,ckc_metric,train_p, train_l, test_p, test_l,val_p,val_l):
     train_time_meter = AverageMeter()
     # wandb.watch(model, log_freq=100)
     for epoch in range(epoch_start, args.num_epoch):
-        train_loss,start,end = train_loop(args,model,model_tea,train_loader,optimizer,device,amp_autocast,criterion,loss_scaler,scheduler,k,mm_sche,epoch)
+        train_loss,start,end = train_loop(args,model,train_loader,optimizer,device,amp_autocast,criterion,loss_scaler,scheduler,k,epoch)
         train_time_meter.update(end-start)
-        stop,accuracy, auc_value, precision, recall, fscore, test_loss = val_loop(args,model,val_loader,device,criterion,early_stopping,epoch,model_tea)
-
-        if model_tea is not None:
-            _,accuracy_tea, auc_value_tea, precision_tea, recall_tea, fscore_tea, test_loss_tea = val_loop(args,model_tea,val_loader,device,criterion,None,epoch,model_tea)
-            if args.wandb:
-                rowd = OrderedDict([
-                    ("val_acc_tea",accuracy_tea),
-                    ("val_precision_tea",precision_tea),
-                    ("val_recall_tea",recall_tea),
-                    ("val_fscore_tea",fscore_tea),
-                    ("val_auc_tea",auc_value_tea),
-                    ("val_loss_tea",test_loss_tea),
-                ])
-
-                rowd = OrderedDict([ (str(k)+'-fold/'+_k,_v) for _k, _v in rowd.items()])
-                wandb.log(rowd)
-
-            if auc_value_tea > opt_tea_auc:
-                opt_tea_auc = auc_value_tea
-                if args.wandb:
-                    rowd = OrderedDict([
-                        ("best_tea_auc",opt_tea_auc)
-                    ])
-                    rowd = OrderedDict([ (str(k)+'-fold/'+_k,_v) for _k, _v in rowd.items()])
-                    wandb.log(rowd)
+        stop,accuracy, auc_value, precision, recall, fscore, test_loss = val_loop(args,model,val_loader,device,criterion,early_stopping,epoch)
 
         if args.always_test:
 
@@ -407,32 +292,6 @@ def one_fold(args,k,ckc_metric,train_p, train_l, test_p, test_l,val_p,val_l):
                     rowd = OrderedDict([ (str(k)+'-fold/'+_k,_v) for _k, _v in rowd.items()])
                     wandb.log(rowd)
             
-            if model_tea is not None:
-                _te_tea_accuracy, _te_tea_auc_value, _te_tea_precision, _te_tea_recall, _te_tea_fscore,_te_tea_test_loss_log = test(args,model_tea,test_loader,device,criterion,model_tea)
-            
-                if args.wandb:
-                    rowd = OrderedDict([
-                        ("te_tea_acc",_te_tea_accuracy),
-                        ("te_tea_precision",_te_tea_precision),
-                        ("te_tea_recall",_te_tea_recall),
-                        ("te_tea_fscore",_te_tea_fscore),
-                        ("te_tea_auc",_te_tea_auc_value),
-                        ("te_tea_loss",_te_tea_test_loss_log),
-                    ])
-
-                    rowd = OrderedDict([ (str(k)+'-fold/'+_k,_v) for _k, _v in rowd.items()])
-                    wandb.log(rowd)
-
-                if _te_tea_auc_value > opt_te_tea_auc:
-                    opt_te_tea_auc = _te_tea_auc_value
-                    opt_te_tea_fs = _te_tea_fscore
-                    if args.wandb:
-                        rowd = OrderedDict([
-                            ("best_te_tea_auc",opt_te_tea_auc),
-                            ("best_te_tea_f1",_te_fscore)
-                        ])
-                        rowd = OrderedDict([ (str(k)+'-fold/'+_k,_v) for _k, _v in rowd.items()])
-                        wandb.log(rowd)
         if not args.no_log:
             print('\r Epoch [%d/%d] train loss: %.1E, test loss: %.1E, accuracy: %.3f, auc_value:%.3f, precision: %.3f, recall: %.3f, fscore: %.3f , time: %.3f(%.3f)' % 
         (epoch+1, args.num_epoch, train_loss, test_loss, accuracy, auc_value, precision, recall, fscore, train_time_meter.val,train_time_meter.avg))
@@ -464,7 +323,6 @@ def one_fold(args,k,ckc_metric,train_p, train_l, test_p, test_l,val_p,val_l):
             if not args.no_log:
                 best_pt = {
                     'model': model.state_dict(),
-                    'teacher': model_tea.state_dict() if model_tea is not None else None,
                 }
                 torch.save(best_pt, os.path.join(args.model_path, 'fold_{fold}_model_best_auc.pt'.format(fold=k)))
         if args.wandb:
@@ -511,11 +369,8 @@ def one_fold(args,k,ckc_metric,train_p, train_l, test_p, test_l,val_p,val_l):
         best_std = torch.load(os.path.join(args.model_path, 'fold_{fold}_model_best_auc.pt'.format(fold=k)))
         info = model.load_state_dict(best_std['model'])
         print(info)
-        if model_tea is not None and best_std['teacher'] is not None:
-            info = model_tea.load_state_dict(best_std['teacher'])
-            print(info)
 
-    accuracy, auc_value, precision, recall, fscore,test_loss_log = test(args,model,test_loader,device,criterion,model_tea)
+    accuracy, auc_value, precision, recall, fscore,test_loss_log = test(args,model,test_loader,device,criterion)
     
     if args.wandb:
         wandb.log({
@@ -540,17 +395,15 @@ def one_fold(args,k,ckc_metric,train_p, train_l, test_p, test_l,val_p,val_l):
         
     return [acs,pre,rec,fs,auc,te_auc,te_fs]
 
-def train_loop(args,model,model_tea,loader,optimizer,device,amp_autocast,criterion,loss_scaler,scheduler,k,mm_sche,epoch):
+def train_loop(args,model,loader,optimizer,device,amp_autocast,criterion,loss_scaler,scheduler,k,epoch):
     start = time.time()
     loss_cls_meter = AverageMeter()
     loss_cl_meter = AverageMeter()
     patch_num_meter = AverageMeter()
     keep_num_meter = AverageMeter()
-    mm_meter = AverageMeter()
+
     train_loss_log = 0.
     model.train()
-    if model_tea is not None:
-        model_tea.train()
 
     for i, data in enumerate(loader):
         optimizer.zero_grad()
@@ -572,19 +425,7 @@ def train_loop(args,model,model_tea,loader,optimizer,device,amp_autocast,criteri
             elif args.group_shuffle:
                 bag = group_shuffle(bag,args.shuffle_group)
 
-            if args.model == 'mhim':
-                if model_tea is not None:
-                    cls_tea,attn = model_tea.forward_teacher(bag,return_attn=True)
-                else:
-                    attn,cls_tea = None,None
-
-                cls_tea = None if args.cl_alpha == 0. else cls_tea
-
-                train_logits, cls_loss,patch_num,keep_num = model(bag,attn,cls_tea,i=epoch*len(loader)+i)
-
-            elif args.model == 'pure':
-                train_logits, cls_loss,patch_num,keep_num = model.test(bag)
-            elif args.model in ('clam_sb','clam_mb','dsmil'):
+            if args.model in ('clam_sb','clam_mb','dsmil'):
                 train_logits,cls_loss,patch_num = model(bag,label,criterion)
                 keep_num = patch_num
             else:
@@ -609,24 +450,11 @@ def train_loop(args,model,model_tea,loader,optimizer,device,amp_autocast,criteri
             optimizer.step()
             if args.lr_supi and scheduler is not None:
                 scheduler.step()
-            if args.model == 'mhim':
-                if mm_sche is not None:
-                    mm = mm_sche[epoch*len(loader)+i]
-                else:
-                    mm = args.mm
-                if model_tea is not None:
-                    if args.tea_type == 'same':
-                        pass
-                    else:
-                        ema_update(model,model_tea,mm)
-            else:
-                mm = 0.
 
         loss_cls_meter.update(logit_loss,1)
         loss_cl_meter.update(cls_loss,1)
         patch_num_meter.update(patch_num,1)
         keep_num_meter.update(keep_num,1)
-        mm_meter.update(mm,1)
 
         if i % args.log_iter == 0 or i == len(loader)-1:
             lrl = [param_group['lr'] for param_group in optimizer.param_groups]
@@ -637,7 +465,6 @@ def train_loop(args,model,model_tea,loader,optimizer,device,amp_autocast,criteri
                 ('cl_loss',loss_cl_meter.avg),
                 ('patch_num',patch_num_meter.avg),
                 ('keep_num',keep_num_meter.avg),
-                ('mm',mm_meter.avg),
             ])
             if not args.no_log:
                 print('[{}/{}] logit_loss:{}, cls_loss:{},  patch_num:{}, keep_num:{} '.format(i,len(loader)-1,loss_cls_meter.avg,loss_cl_meter.avg,patch_num_meter.avg, keep_num_meter.avg))
@@ -654,9 +481,7 @@ def train_loop(args,model,model_tea,loader,optimizer,device,amp_autocast,criteri
     
     return train_loss_log,start,end
 
-def val_loop(args,model,loader,device,criterion,early_stopping,epoch,model_tea=None):
-    if model_tea is not None:
-        model_tea.eval()
+def val_loop(args,model,loader,device,criterion,early_stopping,epoch):
     model.eval()
     loss_cls_meter = AverageMeter()
     test_loss_log = 0.
@@ -679,9 +504,8 @@ def val_loop(args,model,loader,device,criterion,early_stopping,epoch,model_tea=N
                 batch_size=bag.size(0)
 
             label=data[1].to(device)
-            if args.model in ('mhim','pure'):
-                test_logits = model.forward_test(bag)
-            elif args.model == 'dsmil':
+
+            if args.model == 'dsmil':
                 test_logits,_ = model(bag)
             else:
                 test_logits = model(bag)
@@ -718,9 +542,7 @@ def val_loop(args,model,loader,device,criterion,early_stopping,epoch,model_tea=N
         stop = False
     return stop,accuracy, auc_value, precision, recall, fscore,loss_cls_meter.avg
 
-def test(args,model,loader,device,criterion,model_tea=None):
-    if model_tea is not None:
-        model_tea.eval()
+def test(args,model,loader,device,criterion):
     model.eval()
     test_loss_log = 0.
     bag_logit, bag_labels=[], []
@@ -742,10 +564,8 @@ def test(args,model,loader,device,criterion,model_tea=None):
                 batch_size=bag.size(0)
 
             label=data[1].to(device)
-            if args.model in ('mhim','pure'):
-                #test_logits = model.test(bag)
-                test_logits = model.forward_test(bag)
-            elif args.model == 'dsmil':
+
+            if args.model == 'dsmil':
                 test_logits,_ = model(bag)
             else:
                 test_logits = model(bag)
@@ -835,14 +655,14 @@ if __name__ == '__main__':
     parser.add_argument('--peg_1d', action='store_true', help='1-D PEG and PPEG')
     parser.add_argument('--region_num', default=8, type=int, help='Number of the region')
     parser.add_argument('--mlp_ratio', default=4., type=int, help='Ratio of MLP in the FFN')
-    parser.add_argument('--min_win_num', default=0, type=int, help='position of pos embed [-1,0]')
+    parser.add_argument('--min_region_num', default=0, type=int, help='position of pos embed [-1,0]')
     parser.add_argument('--qkv_bias', action='store_false')
     parser.add_argument('--trans_conv', action='store_false', help='lr_scheduler_update_per_iter')
     parser.add_argument('--trans_conv_bias', action='store_false', help='lr_scheduler_update_per_iter')
     parser.add_argument('--trans_conv_2d', action='store_true', help='lr_scheduler_update_per_iter')
     parser.add_argument('--trans_conv_k', default=15, type=int, help='position of pos embed [-1,0]')
     parser.add_argument('--trans_conv_type', default='attn', type=str, help='Camelyon16')
-    parser.add_argument('--win_attn', default='native', type=str, help='Camelyon16')
+    parser.add_argument('--region_attn', default='native', type=str, help='Camelyon16')
 
     # DAttention
     parser.add_argument('--da_act', default='relu', type=str, help='Activation func in the DAttention [gelu,relu]')
@@ -851,27 +671,6 @@ if __name__ == '__main__':
     parser.add_argument('--patch_shuffle', action='store_true', help='2-D group shuffle')
     parser.add_argument('--group_shuffle', action='store_true', help='Group shuffle')
     parser.add_argument('--shuffle_group', default=0, type=int, help='Number of the shuffle group')
-
-    # MHIM
-    # Mask ratio
-    parser.add_argument('--mask_ratio', default=0., type=float, help='Random mask ratio')
-    parser.add_argument('--mask_ratio_l', default=0., type=float, help='Low attention mask ratio')
-    parser.add_argument('--mask_ratio_h', default=0., type=float, help='High attention mask ratio')
-    parser.add_argument('--mask_ratio_hr', default=1., type=float, help='Randomly high attention mask ratio')
-    parser.add_argument('--mrh_sche', action='store_true', help='Decay of HAM')
-    parser.add_argument('--msa_fusion', default='vote', type=str, help='[mean,vote]')
-    
-    # Siamese framework
-    parser.add_argument('--cl_alpha', default=0., type=float, help='Auxiliary loss alpha')
-    parser.add_argument('--temp_t', default=0.1, type=float, help='Temperature')
-    parser.add_argument('--cl_loss', default='ce', type=str, help='Type of contrastive learning loss')
-    parser.add_argument('--teacher_init', default='none', type=str, help='Path to initial teacher model')
-    parser.add_argument('--no_tea_init', action='store_true', help='Without teacher initialization')
-    parser.add_argument('--init_stu_type', default='none', type=str, help='Student initialization [none,fc,all]')
-    parser.add_argument('--tea_type', default='none', type=str, help='[none,same]')
-    parser.add_argument('--mm', default=0.9999, type=float, help='Ema decay [0.9997]')
-    parser.add_argument('--mm_final', default=1., type=float, help='Final ema decay [1.]')
-    parser.add_argument('--mm_sche', action='store_true', help='Cosine schedule of ema decay')
 
     # Misc
     parser.add_argument('--title', default='default', type=str, help='Title of exp')
@@ -928,8 +727,8 @@ if __name__ == '__main__':
         else:
             wandb.init(project=args.project, entity='dearcat',name=args.title,config=args,dir=os.path.join(args.model_path))
         wandb.save('./modules/contrastive1.py',policy='now')
-        wandb.save('./modules/swin.py',policy='now')
-        wandb.save('./modules/swin_atten.py',policy='now')
+        wandb.save('./modules/rrt.py',policy='now')
+        wandb.save('./modules/rrt_atten.py',policy='now')
         wandb.save('./modules/nystrom_attention.py',policy='now')
         wandb.save('./modules/translayer.py',policy='now')
         wandb.save('./modules/datten.py',policy='now')

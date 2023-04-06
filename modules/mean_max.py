@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
-from .swin import SwinEncoder
+from .rrt import RRTEncoder
 #from .setmil import ASPP
 # import sys
 # sys.stdout = open('data1.log', mode='w', encoding='utf-8')
@@ -43,7 +43,7 @@ class MeanMIL(nn.Module):
         if dropout:
             head += [nn.Dropout(0.25)]
             
-        #head += [SwinEncoder(attn='swin',pool='none')]
+        #head += [RRTEncoder(attn='rrt',pool='none')]
         #head += [ASPP(28,512,embed_dim=128)]
         head += [nn.Linear(192,n_classes)]
         
@@ -94,7 +94,7 @@ class MaxMIL(nn.Module):
 
         if dropout:
             head += [nn.Dropout(0.25)]
-        head += [SwinEncoder(attn='swin',pool='none',trans_conv=True)]
+        head += [RRTEncoder(attn='rrt',pool='none',trans_conv=True)]
         #head += [nn.Linear(192,n_classes)]
         head += [nn.Linear(512,n_classes)]
         self.head = nn.Sequential(*head)
@@ -121,7 +121,7 @@ class FCLayer(nn.Module):
     def __init__(self, dropout=True,act='relu'):
         super(FCLayer, self).__init__()
         self.embed = [nn.Linear(1024, 512)]
-        self.embed.append(SwinEncoder(attn='swin',pool='none'))
+        self.embed.append(RRTEncoder(attn='rrt',pool='none'))
         # self.embed = nn.ModuleList([nn.Linear(1024, 512)])
         
         if act.lower() == 'gelu':

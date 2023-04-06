@@ -2,8 +2,7 @@ import torch
 import torch.nn as nn
 from einops import rearrange
 from .nystrom_attention import NystromAttention
-from .swin_atten import SwinAttntion
-from .swin_atten_1d import SwinAttntion1D
+from .rmsa import RegionAttntion
 from timm.models.layers import DropPath
 import numpy as np
 
@@ -104,7 +103,7 @@ class TransLayer(nn.Module):
             x = x + self.attn(self.norm(x))
             return x  
 class TransLayer1(nn.Module):
-    def __init__(self, norm_layer=nn.LayerNorm, dim=512,head=8,drop_out=0.1,drop_path=0.,need_down=False,need_reduce=False,down_ratio=2,ffn=False,ffn_act='gelu',mlp_ratio=4.,trans_dim=64,n_cycle=1,attn='ntrans',n_window=8,trans_conv=False,shift_size=False,window_size=0,rpe=False,min_win_num=0,min_win_ratio=0,qkv_bias=True,**kwargs):
+    def __init__(self, norm_layer=nn.LayerNorm, dim=512,head=8,drop_out=0.1,drop_path=0.,need_down=False,need_reduce=False,down_ratio=2,ffn=False,ffn_act='gelu',mlp_ratio=4.,trans_dim=64,n_cycle=1,attn='ntrans',n_region=8,trans_conv=False,shift_size=False,region_size=0,rpe=False,min_region_num=0,min_region_ratio=0,qkv_bias=True,**kwargs):
         super().__init__()
 
         if need_reduce:
@@ -125,32 +124,32 @@ class TransLayer1(nn.Module):
                 residual = True,         # whether to do an extra residual with the value or not. supposedly faster convergence if turned on
                 dropout=drop_out
             )
-        elif attn == 'swin':
-            self.attn = SwinAttntion(
+        elif attn == 'rrt':
+            self.attn = RegionAttntion(
                 dim=dim,
                 num_heads=head,
                 drop=drop_out,
-                window_num=n_window,
+                region_num=n_region,
                 head_dim=trans_dim,
                 conv=trans_conv,
                 shift_size=shift_size,
-                window_size=window_size,
+                region_size=region_size,
                 rpe=rpe,
-                min_win_num=min_win_num,
-                min_win_ratio=min_win_ratio,
+                min_region_num=min_region_num,
+                min_region_ratio=min_region_ratio,
                 qkv_bias=qkv_bias,
                 **kwargs
             )
-        elif attn == 'swin1d':
-            self.attn = SwinAttntion1D(
-                dim=dim,
-                num_heads=head,
-                drop=drop_out,
-                window_num=n_window,
-                head_dim=trans_dim,
-                conv=trans_conv,
-                **kwargs
-            )
+        # elif attn == 'rrt1d':
+        #     self.attn = RegionAttntion1D(
+        #         dim=dim,
+        #         num_heads=head,
+        #         drop=drop_out,
+        #         region_num=n_region,
+        #         head_dim=trans_dim,
+        #         conv=trans_conv,
+        #         **kwargs
+        #     )
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.ffn = ffn

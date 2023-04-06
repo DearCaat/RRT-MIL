@@ -4,7 +4,7 @@ import torch.nn.init as init
 import torch.nn.functional as F
 import torchvision.models as models
 import sys
-from .swin import SwinEncoder
+from .rrt import RRTEncoder
 sys.path.append("..")
 from utils import group_shuffle
 
@@ -130,9 +130,9 @@ class DAttention(nn.Module):
         if dropout:
             self.feature += [nn.Dropout(0.25)]
 
-        #self.feature += [SwinEncoder(attn='native',pool='none',mlp_dim=192,n_heads=3,region_num=1,trans_conv=True)] 
+        #self.feature += [RRTEncoder(attn='native',pool='none',mlp_dim=192,n_heads=3,region_num=1,trans_conv=True)] 
 
-        #self.feature += [SwinEncoder(attn='swin',pool='none',trans_conv=True)] 
+        #self.feature += [RRTEncoder(attn='rrt',pool='none',trans_conv=True)] 
         self.feature = nn.Sequential(*self.feature)
 
         self.attention = nn.Sequential(
