@@ -38,7 +38,6 @@ class PPEG(nn.Module):
         # if add_length >0:
         x = torch.cat([x, x[:,:add_length,:]],dim = 1) 
 
-        # 避免最后补出来的特征图小于卷积核，这里只能用zero padding
         if H < 7:
             H,W = 7,7
             zero_pad = H * W - (N+add_length)
@@ -201,17 +200,3 @@ class RPE(nn.Module):
         print(relative_position_bias.size())
 
         return x + self.absolute_pos_embed.unsqueeze(1).unsqueeze(1).repeat(1,H,W,1)
-
-# class PEG(nn.Module):
-#     def __init__(self, dim=512):
-#         super(PEG, self).__init__()
-#         self.proj = nn.Conv2d(dim, dim, 3, 1, 3//2, groups=dim)   
-
-#     def forward(self, x, H, W):
-#         B, _, C = x.shape
-#         # cls_token, feat_token = x[:, 0], x[:, 1:]
-#         cnn_feat = x.transpose(1, 2).view(B, C, H, W)
-#         x = self.proj(cnn_feat)+cnn_feat
-#         x = x.flatten(2).transpose(1, 2)
-#         # x = torch.cat((cls_token.unsqueeze(1), x), dim=1)
-#         return x

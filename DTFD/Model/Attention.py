@@ -15,7 +15,7 @@ def initialize_weights(module):
 
 
 class Attention2(nn.Module):
-    def __init__(self, L=512, D=128, K=1,n_robust=0):
+    def __init__(self, L=512, D=128, K=1):
         super(Attention2, self).__init__()
 
         self.L = L
@@ -30,15 +30,6 @@ class Attention2(nn.Module):
 
         self.apply(initialize_weights)
 
-        if n_robust>0:
-            # 改变init
-            rng = torch.random.get_rng_state()
-            torch.random.manual_seed(n_robust)
-            self.apply(initialize_weights)
-            torch.random.set_rng_state(rng)
-            # 改变后续的随机状态
-            [torch.rand((1024,512)) for i in range(n_robust)]
-
     def forward(self, x, isNorm=True):
         ## x: N x L
         A = self.attention(x)  ## N x K
@@ -49,7 +40,7 @@ class Attention2(nn.Module):
 
 
 class Attention_Gated(nn.Module):
-    def __init__(self, L=512, D=128, K=1,n_robust=0):
+    def __init__(self, L=512, D=128, K=1):
         super(Attention_Gated, self).__init__()
 
         self.L = L
@@ -70,15 +61,6 @@ class Attention_Gated(nn.Module):
 
         self.apply(initialize_weights)
 
-        if n_robust>0:
-            # 改变init
-            rng = torch.random.get_rng_state()
-            torch.random.manual_seed(n_robust)
-            self.apply(initialize_weights)
-            torch.random.set_rng_state(rng)
-            # 改变后续的随机状态
-            [torch.rand((1024,512)) for i in range(n_robust)]
-
     def forward(self, x, isNorm=True):
         ## x: N x L
         A_V = self.attention_V(x)  # NxD
@@ -93,10 +75,10 @@ class Attention_Gated(nn.Module):
 
 
 class Attention_with_Classifier(nn.Module):
-    def __init__(self, L=512, D=128, K=1, num_cls=2, droprate=0,n_robust=0):
+    def __init__(self, L=512, D=128, K=1, num_cls=2, droprate=0):
         super(Attention_with_Classifier, self).__init__()
-        self.attention = Attention_Gated(L, D, K,n_robust=n_robust)
-        self.classifier = Classifier_1fc(L, num_cls, droprate,n_robust=n_robust)
+        self.attention = Attention_Gated(L, D, K)
+        self.classifier = Classifier_1fc(L, num_cls, droprate)
     def forward(self, x): ## x: N x L
         AA = self.attention(x)  ## K x N
         afeat = torch.mm(AA, x) ## K x L

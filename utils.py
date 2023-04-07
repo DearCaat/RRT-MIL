@@ -1,7 +1,6 @@
 import numpy as np
 from sklearn.metrics import roc_curve, roc_auc_score, precision_recall_fscore_support, accuracy_score
 import torch
-import os
 
 def seed_torch(seed=2021):
         import random
@@ -76,11 +75,6 @@ def optimal_thresh(fpr, tpr, thresholds, p=0):
     idx = np.argmin(loss, axis=0)
     return fpr[idx], tpr[idx], thresholds[idx]
 
-# def five_scores(bag_labels, bag_logits, bag_hat):
-#     auc_value = roc_auc_score(bag_labels, bag_logits)
-#     precision, recall, f1score, _ = precision_recall_fscore_support(bag_labels, bag_hat, average='binary')
-#     accuracy = accuracy_score(bag_labels, bag_hat)
-#     return accuracy, auc_value, precision, recall, f1score
 
 def make_weights_for_balanced_classes_split(dataset):
     N = float(len(dataset))

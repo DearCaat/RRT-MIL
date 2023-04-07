@@ -1,35 +1,25 @@
+## Modified by DTFD@https://github.com/hrzhang1123/DTFD-MIL
 import torch
 torch.multiprocessing.set_sharing_strategy('file_system')
 import os
 import json
 import wandb
-import pickle
 import random
-import imageio
 import argparse
 import numpy as np
-from PIL import Image
 from utils import *
 import time
 from collections import OrderedDict
 # from dataloader import *
 import torch.nn.functional as F
-from torchvision import transforms
 from torch.utils.tensorboard import SummaryWriter
 from Model.Restnet import *
 from Model.Attention import Attention_with_Classifier
 from Model.Attention import Attention_Gated as Attention
 from Model.network import Classifier_1fc, DimReduction
 from torch.utils.data import WeightedRandomSampler,RandomSampler
-try:
-    from timm.utils import trainer
-except:
-    pass
-
-
 
 def one_fold(params,k,train_p,train_l,test_p,test_l,val_p,val_l,epoch_step,writer):
-
 
         torch.manual_seed(params.seed)
         torch.cuda.manual_seed(params.seed)
@@ -38,14 +28,10 @@ def one_fold(params,k,train_p,train_l,test_p,test_l,val_p,val_l,epoch_step,write
         torch.cuda.manual_seed_all(params.seed)
 
         in_chn = 1024 #1024
-        classifier = Classifier_1fc(params.mDim, params.num_cls, params.droprate,n_robust=params.n_robust).to(params.device)
-        attention = Attention(params.mDim,n_robust=params.n_robust).to(params.device)
-        dimReduction = Resnet().to(params.device) if params.dataset == 'pneumonia' else DimReduction(in_chn, params.mDim, numLayer_Res=params.numLayer_Res,dropout=params.dropout,act=params.act,n_robust=params.n_robust).to(params.device)
-        attCls = Attention_with_Classifier(L=params.mDim, num_cls=params.num_cls, droprate=params.droprate_2,n_robust=params.n_robust).to(params.device)
-
-        # if params.dataset == 'camelyon16' and params.initfc:
-        #     pre_dic = torch.load(params.initfc)
-        #     dimReduction.load_state_dict(pre_dic['dim_reduction'])
+        classifier = Classifier_1fc(params.mDim, params.num_cls, params.droprate).to(params.device)
+        attention = Attention(params.mDim).to(params.device)
+        dimReduction = DimReduction(in_chn, params.mDim, numLayer_Res=params.numLayer_Res,dropout=params.dropout,act=params.act).to(params.device)
+        attCls = Attention_with_Classifier(L=params.mDim, num_cls=params.num_cls, droprate=params.droprate_2).to(params.device)
 
         if params.init_type != 'none':
             init_path=os.path.join(params.initfc,'fold_{fold}_best_model.pth'.format(fold=k))
@@ -81,14 +67,7 @@ def one_fold(params,k,train_p,train_l,test_p,test_l,val_p,val_l,epoch_step,write
             f.write(json.dumps(z))
         log_file = open(log_dir, 'a')
 
-        # with open(params.mDATA0_dir_train0, 'rb') as f:
-        #     mDATA_train = pickle.load(f)
-        # with open(params.mDATA0_dir_val0, 'rb') as f:
-        #     mDATA_val = pickle.load(f)
-        # with open(params.mDATA_dir_test0, 'rb') as f:
-        #     mDATA_test = pickle.load(f)
-
-        # 加载数据集
+        # load data
         SlideNames_train, FeatList_train, Label_train = reOrganize_mDATA_v2(train_p[k],train_l[k],dataset=params.dataset,dataset_root=params.dataset_root)
         
         if params.val_ratio != 0.:
@@ -159,7 +138,7 @@ def one_fold(params,k,train_p,train_l,test_p,test_l,val_p,val_l,epoch_step,write
                 rowd = OrderedDict([ (str(k)+'-fold/'+_k,_v) for _k, _v in rowd.items()])
                 wandb.log(rowd)
             
-            # 边训练边测试
+            # testing when the training phase
             if params.always_test:
                 auc_val_test,mF1_1_test,macc_1_test,mprec_1_test, mrecal_1_test,test_loss_test = test_attention_DTFD_preFeat_MultipleMean(classifier=classifier, dimReduction=dimReduction, attention=attention,
                                                                 UClassifier=attCls, mDATA_list=(SlideNames_test, FeatList_test, Label_test), criterion=ce_cri, epoch=ii,  params=params, f_log=log_file, writer=writer, numGroup=params.numGroup_test, total_instance=params.total_instance_test, distill=params.distill_type)
@@ -221,14 +200,7 @@ def one_fold(params,k,train_p,train_l,test_p,test_l,val_p,val_l,epoch_step,write
         print_log(f'test slides: {len(SlideNames_test)}', log_file)
         tauc,tf1,tacc,tprec, trecal,_ = test_attention_DTFD_preFeat_MultipleMean(classifier=classifier, dimReduction=dimReduction, attention=attention,
                                 UClassifier=attCls, mDATA_list=(SlideNames_test, FeatList_test, Label_test), criterion=ce_cri, epoch=ii,  params=params, f_log=log_file, writer=writer, numGroup=params.numGroup_test, total_instance=params.total_instance_test, distill=params.distill_type)
-        # if params.wandb:
-        #     wandb.log({
-        #         "test_acc":tacc,
-        #         "test_precesion":tprec,
-        #         "test_recall":trecal,
-        #         "test_fscore":tf1,
-        #         "test_auc":tauc,
-        #     })
+
         if params.wandb:
             rowd = OrderedDict([
                 ("test_acc",tacc),
@@ -255,7 +227,7 @@ def main(params):
     epoch_step = json.loads(params.epoch_step)
     writer = SummaryWriter(os.path.join(params.log_dir, 'LOG', params.name))
 
-    # 设置随机种子
+    # set the random seed
     random.seed(params.seed)
     np.random.seed(params.seed)
     torch.manual_seed(params.seed)
@@ -269,32 +241,7 @@ def main(params):
         random.shuffle(index)
         p = p[index]
         l = l[index]
-        # 官方划分
-        if params.c16_offi == 1:
-            train_p,train_l,test_p,test_l,val_p,val_l = [],[],[],[],[],[]
-            for i in range(len(p)):
-                if 'test' in p[i]:
-                    test_p.extend([p[i]])
-                    test_l.extend([l[i]])
-                else:
-                    train_p.extend([p[i]])
-                    train_l.extend([l[i]])
 
-            train_p,train_l,test_p,test_l,val_p,val_l = np.array(train_p),np.array(train_l),np.array(test_p),np.array(test_l),np.array(val_p),np.array(val_l)
-
-            if params.val_ratio > 0:
-                val_index,train_index = data_split(list(range(len(train_p))),params.val_ratio,params.val_label_balance)
-                train_p,train_l,val_p,val_l = train_p[train_index],train_l[train_index],train_p[val_index],train_l[val_index]
-            train_p,train_l,test_p,test_l,val_p,val_l = [train_p for i in range(params.cv_fold) ],[train_l for i in range(params.cv_fold)],[test_p for i in range(params.cv_fold)],[test_l for i in range(params.cv_fold)],[val_p for i in range(params.cv_fold)],[val_l for i in range(params.cv_fold)]
-
-    elif params.dataset.lower() == 'pneumonia':
-        label_path='/data/xxx/pneumonia/label_new_tang.csv'
-        p, l = get_patient_label(label_path)
-        index = [i for i in range(len(p))]
-        random.shuffle(index)
-        p = p[index]
-        l = l[index]
-    
     elif params.dataset.lower() == 'tcga':
         label_path=os.path.join(params.dataset_root,'label.csv')
         p, l = get_patient_label(label_path)
@@ -303,7 +250,7 @@ def main(params):
         p = p[index]
         l = l[index]
 
-    if params.cv_fold > 1 and not params.c16_offi:
+    if params.cv_fold > 1:
         train_p, train_l, test_p, test_l,val_p,val_l = get_kflod(params.cv_fold, p, l,params.val_ratio,params.val_label_balance)
 
     acs, pre, rec,fs,auc=[],[],[],[],[]
@@ -320,8 +267,6 @@ def main(params):
         if params.always_test:
             val_test_auc.append(best_val_auc_test)
         
-        if params.c16_offi:
-            params.seed += 1
 
     if params.always_test:
         if params.wandb:
@@ -699,36 +644,6 @@ def reOrganize_mDATA_v2(mDATA,label,dataset,dataset_root):
                 else:
                     Label.append(0)       
 
-            elif dataset == 'pneumonia':
-                dir_path = "/data/xxx/pneumonia/images"
-                patient_path = os.path.join(dir_path, slide_name)
-                transform = transforms.Compose([
-                    transforms.Resize((256, 256)),
-                    transforms.ToTensor(),  # C*H*W
-                    transforms.Normalize([0.4914, 0.4914, 0.4914], [0.2023, 0.2023, 0.2023])
-                    ])
-                images_list=[]
-                #--->随机挑选样本
-                num=len(os.listdir(patient_path))
-                feat=np.array(os.listdir(patient_path))
-                if num > 60:
-                    sample = np.random.choice(num, 60, replace=False)
-                else:
-                    sample = np.random.choice(num, num, replace=False)
-                sample = np.sort(sample)
-                feat = feat[sample]
-                for _i in range(len(feat)):
-                    image = os.path.join(patient_path,feat[_i])
-                    # image = imageio.imread(image_dir)
-                    # image = np.transpose([image for i in range(3)], [1, 2, 0])  # H*W*C
-                    # image = Image.fromarray(image)
-                    image = Image.open(image).convert('L')
-                    image = image.convert('RGB')
-                    image = transform(image)
-                    images_list.append(image)
-                images_list = torch.stack(images_list)
-                FeatList.append(images_list)  # K*C*H*W 
-            
     return SlideNames, FeatList, Label
 
 
@@ -798,85 +713,24 @@ if __name__ == "__main__":
     parser.add_argument('--temperature', default=1, type=float)
     parser.add_argument('--num_MeanInference', default=1, type=int)
     parser.add_argument('--distill_type', default='AFS', type=str)   ## MaxMinS, MaxS, AFS
-    parser.add_argument('--val_ratio', default=0., type=float, help='Automatic Mixed Precision Training')
-    parser.add_argument('--wandb', action='store_true', help='Automatic Mixed Precision Training')
-    parser.add_argument('--dropout', action='store_true', help='Automatic Mixed Precision Training')
-    parser.add_argument('--weighted', action='store_true', help='Automatic Mixed Precision Training')
-    parser.add_argument('--save_best_model_stage', default=0., type=float, help='Initial learning rate [0.0002]')
-    parser.add_argument('--fix_loader_random', action='store_true', help='Automatic Mixed Precision Training')
-    parser.add_argument('--fix_train_random', action='store_true', help='Automatic Mixed Precision Training')
-    parser.add_argument('--early_stopping', action='store_true', help='Automatic Mixed Precision Training')
-    parser.add_argument('--val_label_balance', action='store_true', help='Automatic Mixed Precision Training')
-    parser.add_argument('--patch_shuffle', action='store_true', help='lr_scheduler_update_per_iter')
+    parser.add_argument('--val_ratio', default=0., type=float,)
+    parser.add_argument('--wandb', action='store_true')
+    parser.add_argument('--dropout', action='store_true')
+    parser.add_argument('--weighted', action='store_true')
+    parser.add_argument('--save_best_model_stage', default=0., type=float)
+    parser.add_argument('--fix_loader_random', action='store_true')
+    parser.add_argument('--fix_train_random', action='store_true')
+    parser.add_argument('--early_stopping', action='store_true')
+    parser.add_argument('--val_label_balance', action='store_true')
+    parser.add_argument('--patch_shuffle', action='store_true')
     parser.add_argument('--act', default='relu', type=str)  
     parser.add_argument('--seed', default=2021, type=int)
-    parser.add_argument('--c16_offi', action='store_true', help='Automatic Mixed Precision Training')
-    parser.add_argument('--n_robust', default=0, type=int, help='lr_scheduler_update_per_iter')
     parser.add_argument('--init_type', default='none', type=str, help='[none,fc,all]')
-    parser.add_argument('--initfc', default='./debug_log', type=str, help='output log filepath')
-    parser.add_argument('--always_test', action='store_true', help='lr_scheduler_update_per_iter')
-    parser.add_argument('--rrt', action='store_true', help='Automatic Mixed Precision Training')
-    parser.add_argument('--no_log', action='store_true', help='Automatic Mixed Precision Training')
-    parser.add_argument('--pict', action='store_true', help='Automatic Mixed Precision Training')
-    # Our
-    # parser.add_argument('--attn', default='ntrans', type=str, help='Camelyon16')
-    # parser.add_argument('--backbone', default='selfattn', type=str, help='[attn,selfattn]')
-    # parser.add_argument('--softmax_attn', action='store_true', help='lr_scheduler_update_per_iter')
-    # parser.add_argument('--ic', action='store_false', help='lr_scheduler_update_per_iter')
-    # parser.add_argument('--act', default='relu', type=str, help='[gelu,relu]')
-    # parser.add_argument('--old', action='store_true', help='Automatic Mixed Precision Training')
-    # # parser.add_argument('--n_robust', default=0, type=int, help='lr_scheduler_update_per_iter')
-    # # parser.add_argument('--dropout', default=0.25, type=float, help='lr_scheduler_update_per_iter')
-    # parser.add_argument('--pool', default='cls_token', type=str, help='Camelyon16')
-    # # Transformer
-    # parser.add_argument('--ffn', action='store_true', help='lr_scheduler_update_per_iter')
-    # parser.add_argument('--ffn_act', default='gelu', type=str, help='[gelu,relu]')
-    # parser.add_argument('--trans_conv', action='store_true', help='lr_scheduler_update_per_iter')
-    # parser.add_argument('--trans_dim', default=64, type=int, help='cl loss alpha')
-    # parser.add_argument('--n_heads', default=8, type=int, help='cl loss alpha')
-    # parser.add_argument('--n_cycle', default=1, type=int, help='cl loss alpha')
-    # parser.add_argument('--n_trans_layers', default=2, type=int, help='cl loss alpha')
-    # parser.add_argument('--se_dim', default=0, type=int, help='cl loss alpha')
-    # parser.add_argument('--trans_drop_out', default=0.1, type=float, help='lr_scheduler_update_per_iter')
-    # parser.add_argument('--drop_path', default=0., type=float, help='lr_scheduler_update_per_iter')
-    # parser.add_argument('--cls_alpha', default=1.0, type=float, help='cl loss alpha')
-    # parser.add_argument('--mae_init', action='store_true', help='lr_scheduler_update_per_iter')
-    # parser.add_argument('--pos_pos', default=0, type=int, help='position of pos embed [-1,0]')
-    # parser.add_argument('--pos', default='ppeg', type=str, help='Camelyon16')
-    # parser.add_argument('--peg_k', default=7, type=int, help='Camelyon16')
-    # parser.add_argument('--peg_bias', action='store_false', help='lr_scheduler_update_per_iter')
-    # parser.add_argument('--region_num', default=8, type=int, help='position of pos embed [-1,0]')
-    # parser.add_argument('--reduce_ratio', default=0, type=int, help='cl loss alpha')
-    # parser.add_argument('--mlp_ratio', default=4., type=int, help='cl loss alpha')
-    # parser.add_argument('--region_size', default=0, type=int, help='position of pos embed [-1,0]')
-    # parser.add_argument('--rpe', action='store_true', help='lr_scheduler_update_per_iter')
-    # parser.add_argument('--min_region_num', default=0, type=int, help='position of pos embed [-1,0]')
-    # parser.add_argument('--min_region_ratio', default=0., type=float, help='position of pos embed [-1,0]')
-    # parser.add_argument('--qkv_bias', action='store_false', help='lr_scheduler_update_per_iter')
-    # parser.add_argument('--trans_conv_bias', action='store_true', help='lr_scheduler_update_per_iter')
-    # parser.add_argument('--trans_conv_2d', action='store_true', help='lr_scheduler_update_per_iter')
-    # parser.add_argument('--trans_conv_k', default=33, type=int, help='position of pos embed [-1,0]')
-    # parser.add_argument('--trans_conv_type', default='attn', type=str, help='Camelyon16')
-    # parser.add_argument('--glob_pe', default='none', type=str, help='Camelyon16')
+    parser.add_argument('--initfc', default='./debug_log', type=str)
+    parser.add_argument('--always_test', action='store_true')
+    parser.add_argument('--no_log', action='store_true')
+
     params = parser.parse_args()
 
-    # if params.all_memo:
-    #     cuda_device = os.environ["CUDA_VISIBLE_DEVICES"]
-    #     occumpy_mem(cuda_device)
-    if params.rrt:
-        trainer.step()
     main(params=params)
 
-    # if params.keep_alltime:
-    #     print('waiting <<<<<<<<<')
-    #     wandb.finish()
-    #     params.wandb = False
-    #     params.no_log = True
-    #     cuda_device = os.environ["CUDA_VISIBLE_DEVICES"]
-    #     occumpy_mem(cuda_device)
-        
-    #     while True:
-    #         main(params=params)
-    if params.pict:
-        trainer.finish(main,wandb,params)
-    

@@ -7,6 +7,7 @@ from collections import Counter
 import csv
 import torchvision.models as models
 from torch import nn
+import os
 
 def make_weights_for_balanced_classes_split(_label):
     N = float(len(_label))
@@ -147,15 +148,14 @@ def get_patient_label(csv_file):
     print("all_counter:{}".format(dict(a)))
     return np.array(patients_list,dtype=object), np.array(labels_list,dtype=object)
 
-def data_split(full_list, ratio, shuffle=True,label=None,label_balance_val=False):
+def data_split(full_list, ratio, shuffle=True,label=None,label_balance_val=True):
     """
-    数据集拆分: 将列表full_list按比例ratio（随机）划分为2个子列表sublist_1与sublist_2
-    :param full_list: 数据列表
-    :param ratio:     子列表1
-    :param shuffle:   子列表2
-    :return:
+    dataset split: split the full_list randomly into two sublist (val-set and train-set) based on the ratio
+    :param full_list: 
+    :param ratio:     
+    :param shuffle:  
     """
-    # 根据类别比例选定验证集
+    # select the val-set based on the label ratio
     if label_balance_val and label is not None:
         _label = label[full_list]
         _label_uni = np.unique(_label)
@@ -170,7 +170,6 @@ def data_split(full_list, ratio, shuffle=True,label=None,label_balance_val=False
                 random.shuffle(_list)
             sublist_1.extend(_list[:offset])
             sublist_2.extend(_list[offset:])
-
     else:
         n_total = len(full_list)
         offset = int(n_total * ratio)
@@ -178,10 +177,10 @@ def data_split(full_list, ratio, shuffle=True,label=None,label_balance_val=False
             return [], full_list
         if shuffle:
             random.shuffle(full_list)
-        sublist_1 = full_list[:offset]
-        sublist_2 = full_list[offset:]
+        val_set = full_list[:offset]
+        train_set = full_list[offset:]
 
-    return sublist_1, sublist_2
+    return val_set, train_set
 
 
 def get_kflod(k, patients_array, labels_array,val_ratio=False,label_balance_val=True):
@@ -211,7 +210,6 @@ def get_kflod(k, patients_array, labels_array,val_ratio=False,label_balance_val=
         val_patients_list.append(x_val)
         val_labels_list.append(y_val)
         
-    # print("get_kflod.type:{}".format(type(np.array(train_patients_list))))
     return np.array(train_patients_list,dtype=object), np.array(train_labels_list,dtype=object), np.array(test_patients_list,dtype=object), np.array(test_labels_list,dtype=object),np.array(val_patients_list,dtype=object), np.array(val_labels_list,dtype=object)
 
 def get_tcga_parser(root,cls_name,mini=False):

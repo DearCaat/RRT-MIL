@@ -1,19 +1,12 @@
 import torch
 import torch.nn as nn
-import torch.utils.checkpoint as checkpoint
-from timm.models.layers import DropPath, to_2tuple, trunc_normal_
+from timm.models.layers import trunc_normal_
 import numpy as np
-from .emb_position import PEG,SINCOS,APE,RPE
-import sys
 from .nystrom_attention import NystromAttention
 
-sys.path.append("..")
-from utils import patch_shuffle
-
 # --------------------------------------------------------
-# Modified by RRT@Microsoft
+# Modified by Swin@Microsoft
 # --------------------------------------------------------
-
 
 class Mlp(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
@@ -33,7 +26,6 @@ class Mlp(nn.Module):
         x = self.drop(x)
         return x
 
-
 def region_partition(x, region_size):
     """
     Args:
@@ -46,7 +38,6 @@ def region_partition(x, region_size):
     x = x.view(B, H // region_size, region_size, W // region_size, region_size, C)
     regions = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, region_size, region_size, C)
     return regions
-
 
 def region_reverse(regions, region_size, H, W):
     """
@@ -62,7 +53,6 @@ def region_reverse(regions, region_size, H, W):
     x = regions.view(B, H // region_size, W // region_size, region_size, region_size, -1)
     x = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(B, H, W, -1)
     return x
-
 
 class InnerAttention(nn.Module):
     r""" Window based multi-head self attention (W-MSA) module with relative position bias.
@@ -215,7 +205,7 @@ class InnerAttention(nn.Module):
         return flops
 
 class RegionAttntion(nn.Module):
-    def __init__(self, dim, input_resolution=None, head_dim=None,num_heads=8, region_size=0, shift_size=False, qkv_bias=True, qk_scale=None, drop=0., attn_drop=0., region_num=8,conv=False,rpe=False,min_region_num=0,min_region_ratio=0.,glob_pe='none',region_attn='native',**kawrgs):
+    def __init__(self, dim, input_resolution=None, head_dim=None,num_heads=8, region_size=0, shift_size=False, qkv_bias=True, qk_scale=None, drop=0., attn_drop=0., region_num=8,conv=False,rpe=False,min_region_num=0,min_region_ratio=0.,region_attn='native',**kawrgs):
         super().__init__()
  
         self.dim = dim
@@ -245,7 +235,6 @@ class RegionAttntion(nn.Module):
             )
 
         self.attn_mask = None
-
 
     def padding(self,x):
         B, L, C = x.shape
@@ -280,7 +269,6 @@ class RegionAttntion(nn.Module):
 
     def forward(self,x,return_attn=False):
         B, L, C = x.shape
-        shift_size = 0
         
         # padding
         x,H,W,add_length,region_num,region_size = self.padding(x)
@@ -304,4 +292,5 @@ class RegionAttntion(nn.Module):
 
         if add_length >0:
             x = x[:,:-add_length]
+
         return x

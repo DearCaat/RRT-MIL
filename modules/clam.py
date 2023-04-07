@@ -15,27 +15,6 @@ def initialize_weights(module):
 			nn.init.constant_(m.weight, 1)
 			nn.init.constant_(m.bias, 0)
 
-# def initialize_weights(module):
-#     for m in module.modules():
-#         if isinstance(m, nn.Conv2d):
-#             # ref from huggingface
-#             nn.init.xavier_normal_(m.weight)
-#             #nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-#             # ref from meituan
-#             # fan_out = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-#             # fan_out //= m.groups
-#             # m.weight.data.normal_(0, math.sqrt(2.0 / fan_out))
-#             if m.bias is not None:
-#                 m.bias.data.zero_()
-#         elif isinstance(m,nn.Linear):
-#             # ref from clam
-#             nn.init.xavier_normal_(m.weight)
-#             if m.bias is not None:
-#                 m.bias.data.zero_()
-#         elif isinstance(m,nn.LayerNorm):
-#             nn.init.constant_(m.bias, 0)
-#             nn.init.constant_(m.weight, 1.0)
-
 """
 Attention Network without Gating (2 fc layers)
 args:
@@ -107,14 +86,12 @@ args:
     subtyping: whether it's a subtyping problem
 """
 
-
 class CLAM_SB(nn.Module):
     def __init__(self, gate = True, size_arg = "small", dropout = 0., k_sample=8, n_classes=2,
-        instance_loss_fn=SmoothTop1SVM(2), subtyping=False,test=False,act='relu',n_robust=0,rrt=False):
+        instance_loss_fn=SmoothTop1SVM(2), subtyping=False,test=False,act='relu',rrt=False):
         super(CLAM_SB, self).__init__()
         self.size_dict = {"small": [1024, 512, 256], "big": [1024, 512, 384],"hipt": [192, 512, 256]}
         size = self.size_dict[size_arg]
-        # fc = [nn.Linear(size[0], size[1]), nn.GELU()]
 
         fc = [nn.Linear(size[0], size[1])]
         
@@ -142,33 +119,8 @@ class CLAM_SB(nn.Module):
         self.n_classes = n_classes
         self.subtyping = subtyping
 
-        if test:
-            self._test = nn.Linear(1024, 1024)
-
         self.apply(initialize_weights)
-        if n_robust>0:
-            # 改变init
-            rng = torch.random.get_rng_state()
-            torch.random.manual_seed(n_robust)
-            self.apply(initialize_weights)
-            torch.random.set_rng_state(rng)
-            # 改变后续的随机状态
-            [torch.rand((1024,512)) for i in range(n_robust)]
-        
-        # if initfc:
-        #     pre_dict = torch.load(initfc)
-        #     new_state_dict ={}
-        #     target = ['attention_net.0.weight','attention_net.0.bias']
-        #     for k,v in pre_dict.items():
-        #         if k in target:
-        #             new_state_dict[k.split('.',1)[1]]=v
-        #     self.attention_net.load_state_dict(new_state_dict,strict=False)
-        #     initialize_weights(self.classifiers)
-        #     initialize_weights(self.instance_classifiers)
-        #     print('embedding fc Inited')
-        # else:
-        # initialize_weights(self)
-
+       
     def relocate(self):
         device=torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.attention_net = self.attention_net.to(device)
@@ -272,7 +224,6 @@ class CLAM_MB(CLAM_SB):
         nn.Module.__init__(self)
         self.size_dict = {"small": [1024, 512, 256], "big": [1024, 512, 384]}
         size = self.size_dict[size_arg]
-        #fc = [nn.Linear(size[0], size[1]), nn.ReLU()]
         
         fc = [nn.Linear(size[0], size[1])]
         
@@ -359,34 +310,3 @@ class CLAM_MB(CLAM_SB):
             return logits,total_inst_loss,ps
         else:
             return logits
-
-if __name__ =="__main__":
-    name = "clam_sb"
-    num_classes= 2
-    dropout=0.25
-    n_robust=1
-    act='relu'
-    def seed_torch(seed=2021):
-        import random
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False    
-
-    seed_torch(seed=2022)
-    initfc = "/data/xxx/output/dsmil/dsmil_reproduce_zxx/bio_clam_sb_ourpar/fold_2_model_best_auc.pt"
-    if name=="clam_sb":
-        model = CLAM_SB(n_classes=num_classes,dropout=dropout,test=n_robust,act=act,initfc=initfc)
-    # elif name == 'clam_mb':
-    #     model = CLAM_MB(n_classes=num_classes,dropout=dropout,act=act)
-    # x=torch.rand(1,3,1024)
-    # label = torch.rand(1)
-    # y = model(x,label)
-
-    for k, v in model.state_dict().items():
-        if k =="instance_classifiers.1.weight":
-            print(v)
-    # print(label)

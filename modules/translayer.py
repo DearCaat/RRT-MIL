@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from einops import rearrange
 from .nystrom_attention import NystromAttention
 from .rmsa import RegionAttntion
 from timm.models.layers import DropPath
@@ -80,30 +79,8 @@ class Mlp(nn.Module):
         x = self.drop(x)
         return x
 
-class TransLayer(nn.Module):
-    def __init__(self, norm_layer=nn.LayerNorm, dim=512,head=8):
-        super().__init__()
-        self.norm = norm_layer(dim)
-        self.attn = NystromAttention(
-            dim = dim,
-            dim_head = dim//8,
-            heads = head,
-            num_landmarks = dim//2,    # number of landmarks
-            pinv_iterations = 6,    # number of moore-penrose iterations for approximating pinverse. 6 was recommended by the paper
-            residual = True,         # whether to do an extra residual with the value or not. supposedly faster convergence if turned on
-            dropout=0.1,
-        )
-
-    def forward(self, x, need_attn=False):
-        if need_attn:
-            z,attn = self.attn(self.norm(x),return_attn=need_attn)
-            x = x+z
-            return x,attn
-        else:
-            x = x + self.attn(self.norm(x))
-            return x  
 class TransLayer1(nn.Module):
-    def __init__(self, norm_layer=nn.LayerNorm, dim=512,head=8,drop_out=0.1,drop_path=0.,need_down=False,need_reduce=False,down_ratio=2,ffn=False,ffn_act='gelu',mlp_ratio=4.,trans_dim=64,n_cycle=1,attn='ntrans',n_region=8,trans_conv=False,shift_size=False,region_size=0,rpe=False,min_region_num=0,min_region_ratio=0,qkv_bias=True,**kwargs):
+    def __init__(self, norm_layer=nn.LayerNorm, dim=512,head=8,drop_out=0.1,drop_path=0.,need_down=False,need_reduce=False,down_ratio=2,ffn=False,ffn_act='gelu',mlp_ratio=4.,trans_dim=64,n_cycle=1,attn='ntrans',n_region=8,epeg=False,shift_size=False,region_size=0,rpe=False,min_region_num=0,min_region_ratio=0,qkv_bias=True,**kwargs):
         super().__init__()
 
         if need_reduce:
@@ -131,7 +108,7 @@ class TransLayer1(nn.Module):
                 drop=drop_out,
                 region_num=n_region,
                 head_dim=trans_dim,
-                conv=trans_conv,
+                conv=epeg,
                 shift_size=shift_size,
                 region_size=region_size,
                 rpe=rpe,
@@ -140,6 +117,8 @@ class TransLayer1(nn.Module):
                 qkv_bias=qkv_bias,
                 **kwargs
             )
+        else:
+            raise NotImplementedError
         # elif attn == 'rrt1d':
         #     self.attn = RegionAttntion1D(
         #         dim=dim,
@@ -147,9 +126,10 @@ class TransLayer1(nn.Module):
         #         drop=drop_out,
         #         region_num=n_region,
         #         head_dim=trans_dim,
-        #         conv=trans_conv,
+        #         conv=epeg,
         #         **kwargs
         #     )
+
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.ffn = ffn
@@ -181,7 +161,6 @@ class TransLayer1(nn.Module):
         else:
             z = self.attn(self.norm(x))
 
-        # print(z)
         x = x+self.drop_path(z)
 
         # FFN

@@ -1,12 +1,8 @@
 import torch
 import torch.nn as nn
-import torch.nn.init as init
 import torch.nn.functional as F
 import torchvision.models as models
-import sys
 from .rrt import RRTEncoder
-sys.path.append("..")
-from utils import group_shuffle
 
 def initialize_weights(module):
     for m in module.modules():
@@ -118,8 +114,6 @@ class DAttention(nn.Module):
         self.L = 512 #512
         self.D = 128 #128
         self.K = 1
-        # self.feature = nn.Sequential(nn.Linear(1024, 512),nn.ReLU(),nn.Dropout(0.25))
-        #self.feature = [nn.Linear(192, 192)]
         self.feature = [nn.Linear(1024, 512)]
         
         if act.lower() == 'gelu':
@@ -130,9 +124,7 @@ class DAttention(nn.Module):
         if dropout:
             self.feature += [nn.Dropout(0.25)]
 
-        #self.feature += [RRTEncoder(attn='native',pool='none',mlp_dim=192,n_heads=3,region_num=1,trans_conv=True)] 
-
-        #self.feature += [RRTEncoder(attn='rrt',pool='none',trans_conv=True)] 
+        #self.feature += [RRTEncoder(attn='rrt',pool='none',epeg=True)] 
         self.feature = nn.Sequential(*self.feature)
 
         self.attention = nn.Sequential(
@@ -144,15 +136,10 @@ class DAttention(nn.Module):
             nn.Linear(self.L*self.K, n_classes),
         )
         
-
-
-        if test:
-            self._test = nn.Linear(1024, 512)
         self.apply(initialize_weights)
     def forward(self, x, return_attn=False,no_norm=False):
         feature = self.feature(x)
 
-        # feature = group_shuffle(feature)
         feature = feature.squeeze(0)
         A = self.attention(feature)
         A_ori = A.clone()
@@ -168,11 +155,5 @@ class DAttention(nn.Module):
                 return Y_prob,A
         else:
             return Y_prob
-if __name__ == "__main__":
-    x=torch.rand(5,3,64,64).cuda()
-    gcnnet=Resnet().cuda()
-    Y_prob=gcnnet(x)
-    criterion = nn.BCEWithLogitsLoss()
-    # loss_max = criterion(Y_prob[1].view(1,-1), label.view(1,-1))
-    print(Y_prob)
+
 

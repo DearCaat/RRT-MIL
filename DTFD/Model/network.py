@@ -3,8 +3,8 @@ import torch
 import torch.nn as nn
 import sys
 sys.path.append('..')
-# sys.path.append('/home/xxx/code/mil/cvpr2023/modules/rrt')
-#from modules.rrt import RRTEncoder
+sys.path.append('/home/xxx/code/mil/cvpr2023/modules/rrt')
+from modules.rrt import RRTEncoder
 
 def initialize_weights(module):
     for m in module.modules():
@@ -16,7 +16,7 @@ def initialize_weights(module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 class Classifier_1fc(nn.Module):
-    def __init__(self, n_channels, n_classes, droprate=0.0,n_robust=0):
+    def __init__(self, n_channels, n_classes, droprate=0.0):
         super(Classifier_1fc, self).__init__()
         self.fc = nn.Linear(n_channels, n_classes)
         self.droprate = droprate
@@ -24,15 +24,6 @@ class Classifier_1fc(nn.Module):
             self.dropout = torch.nn.Dropout(p=self.droprate)
         
         self.apply(initialize_weights)
-
-        if n_robust>0:
-            # 改变init
-            rng = torch.random.get_rng_state()
-            torch.random.manual_seed(n_robust)
-            self.apply(initialize_weights)
-            torch.random.set_rng_state(rng)
-            # 改变后续的随机状态
-            [torch.rand((1024,512)) for i in range(n_robust)]
 
     def forward(self, x):
 
@@ -43,7 +34,7 @@ class Classifier_1fc(nn.Module):
 
 
 class residual_block(nn.Module):
-    def __init__(self, nChn=512,n_robust=0):
+    def __init__(self, nChn=512):
         super(residual_block, self).__init__()
         self.block = nn.Sequential(
                 nn.Linear(nChn, nChn, bias=False),
@@ -54,26 +45,16 @@ class residual_block(nn.Module):
       
         self.apply(initialize_weights)
 
-        if n_robust>0:
-            # 改变init
-            rng = torch.random.get_rng_state()
-            torch.random.manual_seed(n_robust)
-            self.apply(initialize_weights)
-            torch.random.set_rng_state(rng)
-            # 改变后续的随机状态
-            [torch.rand((1024,512)) for i in range(n_robust)]
     def forward(self, x):
         tt = self.block(x)
         x = x + tt
         return x
-
-
 class DimReduction(nn.Module):
-    def __init__(self, n_channels, m_dim=512, numLayer_Res=0,dropout=False,act='relu',n_robust=0):
+    def __init__(self, n_channels, m_dim=512, numLayer_Res=0,dropout=False,act='relu'):
         super(DimReduction, self).__init__()
         self.fc1 = nn.Linear(n_channels, m_dim, bias=False)
-        # 添加自己的re-embedding模块
-        #self.rrt = RRTEncoder(attn='rrt',pool='none',region_size=0)
+        # rtt
+        #self.rtt = RRTEncoder(attn='swin',pool='none',window_size=0)
         self.relu1 = nn.ReLU(inplace=True) if act.lower() == 'relu' else nn.GELU()
         self.numRes = numLayer_Res
         self.drop = nn.Dropout(0.25)
@@ -83,17 +64,8 @@ class DimReduction(nn.Module):
             self.resBlocks.append(residual_block(m_dim))
         self.resBlocks = nn.Sequential(*self.resBlocks)
 
-        
         self.apply(initialize_weights)
 
-        if n_robust>0:
-            # 改变init
-            rng = torch.random.get_rng_state()
-            torch.random.manual_seed(n_robust)
-            self.apply(initialize_weights)
-            torch.random.set_rng_state(rng)
-            # 改变后续的随机状态
-            [torch.rand((1024,512)) for i in range(n_robust)]
     def forward(self, x):
 
         x = self.fc1(x)
@@ -102,9 +74,10 @@ class DimReduction(nn.Module):
             x = self.drop(x)
         if self.numRes > 0:
             x = self.resBlocks(x)
-        # x = self.rrt(x)
+        # x = self.rtt(x)
 
         return x
+    
 if __name__ == "__main__":
     initfc = "../debug_log/bio_dtfd_ourpra/best_model.pth"
     pre_dic = torch.load(initfc)
