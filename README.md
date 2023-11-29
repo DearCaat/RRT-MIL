@@ -1,5 +1,5 @@
 # RRT-MIL
-Training codes and logs of ICCV 2023 submission 3142
+The part of training codes of CVPR2024 submission 4372
 
 ## Training
 ```shell
