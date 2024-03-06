@@ -8,7 +8,7 @@ Official repo of **Feature Re-Embedding: Towards Foundation Model-Level Performa
 ## Prepare Patch Features
 To preprocess WSIs, we used [CLAM](https://github.com/mahmoodlab/CLAM/tree/master#wsi-segmentation-and-patching).
 
-Download the preprocessed patch features (Updating): [Baidu Cloud](https://pan.baidu.com/s/10NKByw7Txk4Vqc3UoN0qvQ?pwd=2023).
+Download the preprocessed patch features (Updating): [Baidu Cloud](https://pan.baidu.com/s/1HOHJgtdnGdccwX9Ga2bKVw?pwd=2024).
 
 ## Training
 Download the Docker Image: [Baidu Cloud](https://pan.baidu.com/s/1EN1JUbIjAl73NwHZF3YlPA?pwd=fek8).
