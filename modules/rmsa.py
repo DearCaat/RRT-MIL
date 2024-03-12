@@ -189,7 +189,7 @@ class RegionAttntion(nn.Module):
         
         add_length = H * W - L
 
-        # 如果要补的太多，就放弃region attention
+        # if padding much，i will give up region attention. only for ablation
         if (add_length > L / (self.min_region_ratio+1e-8) or L < self.min_region_num):
             H, W = int(np.ceil(np.sqrt(L))), int(np.ceil(np.sqrt(L)))
             _n = -H % 2
