@@ -10,9 +10,9 @@ Official repo of **Feature Re-Embedding: Towards Foundation Model-Level Performa
 - Uploaded almost all codes, [docker](https://pan.baidu.com/s/1EN1JUbIjAl73NwHZF3YlPA?pwd=fek8), and [datasets](https://pan.baidu.com/s/1mSzLJ_RVCJFQGe2lZAvEUA?pwd=2024).
 
 ## Prepare Patch Features
-To preprocess WSIs, we used [CLAM](https://github.com/mahmoodlab/CLAM/tree/master#wsi-segmentation-and-patching).
+To preprocess WSIs, we used [CLAM](https://github.com/mahmoodlab/CLAM/tree/master#wsi-segmentation-and-patching). PLIP model and weight can be found in [this](https://github.com/PathologyFoundation/plip).
 
-Download the preprocessed patch features (Updating): [Baidu Cloud](https://pan.baidu.com/s/1mSzLJ_RVCJFQGe2lZAvEUA?pwd=2024).
+Download the preprocessed patch features: [Baidu Cloud](https://pan.baidu.com/s/1mSzLJ_RVCJFQGe2lZAvEUA?pwd=2024).
 
 ## Plug R$`^2`$T into Your Model
 `epeg_k`，`crmsa_k` are the primary hyper-para, you can set `crmsa_heads`, `all_shortcut` and `crmsa_mlp` if you want.
