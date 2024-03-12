@@ -1,5 +1,4 @@
 import torch.nn as nn
-from .rrt import RRTEncoder
 
 def initialize_weights(module):
     for m in module.modules():
@@ -24,10 +23,10 @@ def initialize_weights(module):
 
 
 class MeanMIL(nn.Module):
-    def __init__(self,n_classes=1,dropout=True,act='relu',test=False):
+    def __init__(self,input_dim,n_classes=1,dropout=True,act='relu',rrt=None):
         super(MeanMIL, self).__init__()
 
-        head = [nn.Linear(192,192)]
+        head = [nn.Linear(input_dim,512)]
 
         if act.lower() == 'relu':
             head += [nn.ReLU()]
@@ -36,10 +35,11 @@ class MeanMIL(nn.Module):
 
         if dropout:
             head += [nn.Dropout(0.25)]
-            
-        #head += [RRTEncoder(attn='rrt',pool='none')]
+        
+        if rrt is not None:
+            head += [rrt]
 
-        head += [nn.Linear(192,n_classes)]
+        head += [nn.Linear(512,n_classes)]
         
         self.head = nn.Sequential(*head)
 
@@ -54,10 +54,8 @@ class MeanMIL(nn.Module):
 
 
 class MaxMIL(nn.Module):
-    def __init__(self,n_classes=1,dropout=True,act='relu',test=False):
+    def __init__(self,input_dim,n_classes=1,dropout=True,act='relu',rrt=None):
         super(MaxMIL, self).__init__()
-
-        #head = [nn.Linear(192,192)]
 
         head = [nn.Linear(1024,512)]
 
@@ -68,8 +66,9 @@ class MaxMIL(nn.Module):
 
         if dropout:
             head += [nn.Dropout(0.25)]
-        head += [RRTEncoder(attn='rrt',pool='none',epeg=True)]
-        #head += [nn.Linear(192,n_classes)]
+            
+        if rrt is not None:
+            head += [rrt]
         head += [nn.Linear(512,n_classes)]
         self.head = nn.Sequential(*head)
 

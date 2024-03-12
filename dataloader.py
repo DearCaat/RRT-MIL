@@ -107,7 +107,7 @@ def get_tcga_parser(root,cls_name,mini=False):
 
 class TCGADataset(Dataset):
     
-    def __init__(self, file_name=None, file_label=None,max_patch=-1,root=None,persistence=True,keep_same_psize=0,is_train=False):
+    def __init__(self, file_name=None, file_label=None,max_patch=-1,root=None,persistence=True,keep_same_psize=0,is_train=False,_type='nsclc'):
         """
         Args
         :param images: 
@@ -135,7 +135,11 @@ class TCGADataset(Dataset):
                 else:
                     self.slide_name.append(_sides[_idx])
                 self.slide_label.append(self.patient_label[i])
-        self.slide_label = [ 0 if _l == 'LUAD' else 1 for _l in self.slide_label]
+                
+        if _type.lower() == 'nsclc':
+            self.slide_label = [ 0 if _l == 'LUAD' else 1 for _l in self.slide_label]
+        elif _type.lower() == 'brca':
+            self.slide_label = [ 0 if _l == 'IDC' else 1 for _l in self.slide_label]
 
     def __len__(self):
         return len(self.slide_name)

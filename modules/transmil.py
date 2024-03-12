@@ -62,12 +62,10 @@ class PPEG(nn.Module):
 
 
 class TransMIL(nn.Module):
-    def __init__(self, n_classes,dropout,act):
+    def __init__(self, input_dim, n_classes,dropout,act):
         super(TransMIL, self).__init__()
         self.pos_layer = PPEG(dim=512)
-        #self.pos_layer = nn.Identity()
-        # self._fc1 = nn.Sequential(nn.Linear(1024, 512), nn.ReLU(),nn.Dropout(0.25))
-        self._fc1 = [nn.Linear(1024, 512)]
+        self._fc1 = [nn.Linear(input_dim, 512)]
 
         if act.lower() == 'relu':
             self._fc1 += [nn.ReLU()]
@@ -77,8 +75,6 @@ class TransMIL(nn.Module):
         if dropout:
             self._fc1 += [nn.Dropout(0.25)]
 
-        #self._fc1 += [RRTEncoder(attn='rrt',pool='none',n_heads=2,epeg=False)]
-        
         self._fc1 = nn.Sequential(*self._fc1)
         
         self.cls_token = nn.Parameter(torch.randn(1, 1, 512))

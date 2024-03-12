@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from .rrt import RRTEncoder
-
 
 def initialize_weights(module):
     for m in module.modules():
@@ -96,21 +94,45 @@ class BClassifier(nn.Module):
         return C, A, B 
     
 class MILNet(nn.Module):
-    def __init__(self, i_classifier, b_classifier):
+    def __init__(self,n_classes,dropout,act,input_dim=1024,rrt=None,**kwargs):
         super(MILNet, self).__init__()
-        self.i_classifier = i_classifier
-        self.b_classifier = b_classifier
+
+        self.patch_to_emb = [nn.Linear(input_dim, 512)]
+        if act.lower() == 'relu':
+            self.patch_to_emb += [nn.ReLU()]
+        elif act.lower() == 'gelu':
+            self.patch_to_emb += [nn.GELU()]
+        self.patch_to_emb= nn.Sequential(*self.patch_to_emb)
+        
+        self.dp = nn.Dropout(dropout) if dropout > 0. else nn.Identity()
+
+        self.rrt = rrt if rrt else nn.Identity()
+
+        #self.i_classifier = FCLayer(512,n_classes,dropout,act,input_dim=input_dim)
+        self.i_classifier = nn.Linear(512, n_classes)
+        self.b_classifier = BClassifier(512,n_classes)
 
         self.apply(initialize_weights)
-
-    def forward(self, x):
-        feats, classes = self.i_classifier(x.squeeze()) # feats->N x D
-        # feats, classes = self.i_classifier(x) # feats->N x D  添加rrt需要b*n*c的尺度
-        prediction_bag, A, B = self.b_classifier(feats, classes)
-        max_prediction, _ = torch.max(classes, 0) 
         
-        # return classes, prediction_bag, A, B
-        return max_prediction, prediction_bag
+    def forward(self, x,label=None,loss=None):
+        ps = x.size(1)
+
+        x = self.patch_to_emb(x)
+        feats = self.dp(x.squeeze())
+
+        classes = self.i_classifier(self.rrt(feats))
+        prediction_bag, A, B = self.b_classifier(feats, classes)
+
+        classes,_ = torch.max(classes, 0) 
+
+        if self.training:
+            if isinstance(loss,nn.CrossEntropyLoss):
+                max_loss = loss(classes.view(1,-1),label)
+            elif isinstance(loss,nn.BCEWithLogitsLoss):
+                max_loss = loss(classes.view(1, -1), label.view(1, -1).float())
+            return prediction_bag,max_loss,ps
+        else:
+            return prediction_bag,classes
 
 
 

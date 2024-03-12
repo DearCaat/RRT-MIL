@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
-from .rrt import RRTEncoder
 
 def initialize_weights(module):
     for m in module.modules():
@@ -54,15 +53,17 @@ class Resnet(nn.Module):
         x2=x2.view(1,-1)
         return x2,x
 class AttentionGated(nn.Module):
-    def __init__(self,input_dim=512,act='relu',bias=False,dropout=False):
+    def __init__(self,input_dim,act='relu',bias=False,dropout=False,rrt=None):
         super(AttentionGated, self).__init__()
-        self.L = 512
+        self.L = input_dim
         self.D = 128 #128
         self.K = 1
 
         self.feature = [nn.Linear(1024, 512)]
         self.feature += [nn.ReLU()]
         self.feature += [nn.Dropout(0.25)]
+        if rrt is not None:
+            self.feature += [rrt] 
         self.feature = nn.Sequential(*self.feature)
 
         self.classifier = nn.Sequential(
@@ -109,12 +110,12 @@ class AttentionGated(nn.Module):
         return Y_prob
 
 class DAttention(nn.Module):
-    def __init__(self,n_classes,dropout,act,test):
+    def __init__(self,input_dim,n_classes,dropout,act,rrt=None):
         super(DAttention, self).__init__()
         self.L = 512 #512
         self.D = 128 #128
         self.K = 1
-        self.feature = [nn.Linear(1024, 512)]
+        self.feature = [nn.Linear(input_dim, 512)]
         
         if act.lower() == 'gelu':
             self.feature += [nn.GELU()]
@@ -123,8 +124,8 @@ class DAttention(nn.Module):
 
         if dropout:
             self.feature += [nn.Dropout(0.25)]
-
-        #self.feature += [RRTEncoder(attn='rrt',pool='none',epeg=True)] 
+        if rrt is not None:
+            self.feature += [rrt] 
         self.feature = nn.Sequential(*self.feature)
 
         self.attention = nn.Sequential(

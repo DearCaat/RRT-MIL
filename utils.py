@@ -88,7 +88,7 @@ def make_weights_for_balanced_classes_split(dataset):
 
     return torch.DoubleTensor(weight)
 
-def five_scores(bag_labels, bag_predictions):
+def five_scores(bag_labels, bag_predictions,sub_typing=False):
     fpr, tpr, threshold = roc_curve(bag_labels, bag_predictions, pos_label=1)
     fpr_optimal, tpr_optimal, threshold_optimal = optimal_thresh(fpr, tpr, threshold)
     # threshold_optimal=0.5
@@ -97,9 +97,9 @@ def five_scores(bag_labels, bag_predictions):
     this_class_label[this_class_label>=threshold_optimal] = 1
     this_class_label[this_class_label<threshold_optimal] = 0
     bag_predictions = this_class_label
-    precision, recall, fscore, _ = precision_recall_fscore_support(bag_labels, bag_predictions, average='binary')
+    avg = 'macro' if sub_typing else 'binary'
+    precision, recall, fscore, _ = precision_recall_fscore_support(bag_labels, bag_predictions, average=avg)
     accuracy = accuracy_score(bag_labels, bag_predictions)
-    # accuracy = 1- np.count_nonzero(np.array(bag_labels).astype(int)- bag_predictions.astype(int)) / len(bag_labels)
     return accuracy, auc_value, precision, recall, fscore
 
 def cosine_scheduler(base_value, final_value, epochs, niter_per_ep, warmup_epochs=0, start_warmup_value=0):

@@ -1,22 +1,16 @@
-import torch
 from torch import nn
-from einops import repeat
 from modules.emb_position import *
 from modules.datten import *
 from modules.rmsa import *
-from modules.translayer import *
+from .nystrom_attention import NystromAttention
 from modules.datten import DAttention
+from timm.models.layers import DropPath
 
 def initialize_weights(module):
     for m in module.modules():
         if isinstance(m, nn.Conv2d):
             # ref from huggingface
             nn.init.xavier_normal_(m.weight)
-            #nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-            # ref from meituan
-            # fan_out = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-            # fan_out //= m.groups
-            # m.weight.data.normal_(0, math.sqrt(2.0 / fan_out))
             if m.bias is not None:
                 m.bias.data.zero_()
         elif isinstance(m,nn.Linear):
@@ -28,49 +22,132 @@ def initialize_weights(module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
+class Mlp(nn.Module):
+    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.ReLU, drop=0.):
+        super().__init__()
+        out_features = out_features or in_features
+        hidden_features = hidden_features or in_features
+        self.fc1 = nn.Linear(in_features, hidden_features)
+        self.act = act_layer()
+        self.fc2 = nn.Linear(hidden_features, out_features)
+        self.drop = nn.Dropout(drop)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.act(x)
+        x = self.drop(x)
+        x = self.fc2(x)
+        x = self.drop(x)
+        return x
+
+class TransLayer(nn.Module):
+    def __init__(self, norm_layer=nn.LayerNorm, dim=512,head=8,drop_out=0.1,drop_path=0.,ffn=False,ffn_act='gelu',mlp_ratio=4.,trans_dim=64,attn='rmsa',n_region=8,epeg=False,region_size=0,min_region_num=0,min_region_ratio=0,qkv_bias=True,crmsa_k=3,epeg_k=15,**kwargs):
+        super().__init__()
+
+        self.norm = norm_layer(dim)
+        self.norm2 = norm_layer(dim) if ffn else nn.Identity()
+        if attn == 'ntrans':
+            self.attn = NystromAttention(
+                dim = dim,
+                dim_head = trans_dim,  # dim // 8
+                heads = head,
+                num_landmarks = 256,    # number of landmarks dim // 2
+                pinv_iterations = 6,    # number of moore-penrose iterations for approximating pinverse. 6 was recommended by the paper
+                residual = True,         # whether to do an extra residual with the value or not. supposedly faster convergence if turned on
+                dropout=drop_out
+            )
+        elif attn == 'rmsa':
+            self.attn = RegionAttntion(
+                dim=dim,
+                num_heads=head,
+                drop=drop_out,
+                region_num=n_region,
+                head_dim=dim // head,
+                epeg=epeg,
+                region_size=region_size,
+                min_region_num=min_region_num,
+                min_region_ratio=min_region_ratio,
+                qkv_bias=qkv_bias,
+                epeg_k=epeg_k,
+                **kwargs
+            )
+        elif attn == 'crmsa':
+            self.attn = CrossRegionAttntion(
+                dim=dim,
+                num_heads=head,
+                drop=drop_out,
+                region_num=n_region,
+                head_dim=dim // head,
+                epeg=epeg,
+                region_size=region_size,
+                min_region_num=min_region_num,
+                min_region_ratio=min_region_ratio,
+                qkv_bias=qkv_bias,
+                crmsa_k=crmsa_k,
+                **kwargs
+            )
+        else:
+            raise NotImplementedError
+        # elif attn == 'rrt1d':
+        #     self.attn = RegionAttntion1D(
+        #         dim=dim,
+        #         num_heads=head,
+        #         drop=drop_out,
+        #         region_num=n_region,
+        #         head_dim=trans_dim,
+        #         conv=epeg,
+        #         **kwargs
+        #     )
+
+        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        mlp_hidden_dim = int(dim * mlp_ratio)
+        self.ffn = ffn
+        act_layer = nn.GELU if ffn_act == 'gelu' else nn.ReLU
+        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim,act_layer=act_layer,drop=drop_out) if ffn else nn.Identity()
+
+    def forward(self,x,need_attn=False):
+
+        x,attn = self.forward_trans(x,need_attn=need_attn)
+        
+        if need_attn:
+            return x,attn
+        else:
+            return x
+
+    def forward_trans(self, x, need_attn=False):
+        attn = None
+        
+        if need_attn:
+            z,attn = self.attn(self.norm(x),return_attn=need_attn)
+        else:
+            z = self.attn(self.norm(x))
+
+        x = x+self.drop_path(z)
+
+        # FFN
+        if self.ffn:
+            x = x + self.drop_path(self.mlp(self.norm2(x)))
+
+        return x,attn
+
 class RRTEncoder(nn.Module):
-    def __init__(self,mlp_dim=512,pos_pos=0,pos='none',peg_k=7,attn='ntrans',region_num=8,drop_out=0.1,n_layers=1,n_heads=8,multi_scale=False,drop_path=0.1,pool='attn',da_act='tanh',reduce_ratio=0,ffn=False,ffn_act='gelu',mlp_ratio=4.,da_gated=False,da_bias=False,da_dropout=False,trans_dim=64,n_cycle=1,epeg=True,rpe=False,region_size=0,min_region_num=0,min_region_ratio=0,qkv_bias=True,shift_size=False,peg_bias=True,peg_1d=False,**kwargs):
+    def __init__(self,mlp_dim=512,pos_pos=0,pos='none',peg_k=7,attn='rmsa',region_num=8,drop_out=0.1,n_layers=2,n_heads=8,drop_path=0.,ffn=False,ffn_act='gelu',mlp_ratio=4.,trans_dim=64,epeg=True,epeg_k=15,region_size=0,min_region_num=0,min_region_ratio=0,qkv_bias=True,peg_bias=True,peg_1d=False,cr_msa=True,crmsa_k=3,all_shortcut=False,crmsa_mlp=False,crmsa_heads=8,need_init=False,**kwargs):
         super(RRTEncoder, self).__init__()
         
-        if reduce_ratio == 0:
-            pass
-        elif reduce_ratio == -1:
-            reduce_ratio = n_layers-1
-        else:
-            pass
-
-        self.final_dim = mlp_dim // (2**reduce_ratio) if reduce_ratio > 0 else mlp_dim
-        if multi_scale:
-            self.final_dim = self.final_dim * (2**(n_layers-1))
-
-        self.pool = pool
-        if pool == 'cls_token':
-            self.cls_token = nn.Parameter(torch.randn(1, 1, mlp_dim))
-            nn.init.normal_(self.cls_token, std=1e-6)
-        elif pool == 'attn':
-            self.pool_fn = DAttention(self.final_dim,da_act,gated=da_gated,bias=da_bias,dropout=da_dropout)
+        self.final_dim = mlp_dim
 
         self.norm = nn.LayerNorm(self.final_dim)
+        self.all_shortcut = all_shortcut
 
-        self.layer1 = TransLayer1(dim=mlp_dim,head=n_heads,drop_out=drop_out,drop_path=drop_path,need_down=multi_scale,need_reduce=reduce_ratio!=0,down_ratio=2**reduce_ratio,ffn=ffn,ffn_act=ffn_act,mlp_ratio=mlp_ratio,trans_dim=trans_dim,n_cycle=n_cycle,attn=attn,n_region=region_num,epeg=epeg,rpe=rpe,region_size=region_size,min_region_num=min_region_num,min_region_ratio=min_region_ratio,qkv_bias=qkv_bias,shift_size=shift_size,**kwargs)
+        self.layers = []
+        for i in range(n_layers-1):
+            self.layers += [TransLayer(dim=mlp_dim,head=n_heads,drop_out=drop_out,drop_path=drop_path,ffn=ffn,ffn_act=ffn_act,mlp_ratio=mlp_ratio,trans_dim=trans_dim,attn=attn,n_region=region_num,epeg=epeg,region_size=region_size,min_region_num=min_region_num,min_region_ratio=min_region_ratio,qkv_bias=qkv_bias,**kwargs)]
+        self.layers = nn.Sequential(*self.layers)
+    
+        # CR-MSA
+        self.cr_msa = TransLayer(dim=mlp_dim,head=crmsa_heads,drop_out=drop_out,drop_path=drop_path,ffn=ffn,ffn_act=ffn_act,mlp_ratio=mlp_ratio,trans_dim=trans_dim,attn='crmsa',qkv_bias=qkv_bias,crmsa_k=crmsa_k,crmsa_mlp=crmsa_mlp,**kwargs) if cr_msa else nn.Identity()
 
-        if reduce_ratio > 0:
-            mlp_dim = mlp_dim // (2**reduce_ratio)
-
-        if multi_scale:
-            mlp_dim = mlp_dim*2
-
-        if n_layers >= 2:
-            self.layers = []
-            for i in range(n_layers-2):
-                self.layers += [TransLayer1(dim=mlp_dim,head=n_heads,drop_out=drop_out,drop_path=drop_path,need_down=multi_scale,ffn=ffn,ffn_act=ffn_act,mlp_ratio=mlp_ratio,trans_dim=trans_dim,n_cycle=n_cycle,attn=attn,n_region=region_num,epeg=epeg,rpe=rpe,region_size=region_size,min_region_num=min_region_num,min_region_ratio=min_region_ratio,qkv_bias=qkv_bias) ]
-                if multi_scale:
-                    mlp_dim = mlp_dim*2
-            self.layers += [TransLayer1(dim=mlp_dim,head=n_heads,drop_out=drop_out,drop_path=drop_path,ffn=ffn,ffn_act=ffn_act,mlp_ratio=mlp_ratio,trans_dim=trans_dim,n_cycle=n_cycle,attn=attn,n_region=region_num,epeg=epeg,rpe=rpe,region_size=region_size,min_region_num=min_region_num,min_region_ratio=min_region_ratio,qkv_bias=qkv_bias,shift_size=shift_size,**kwargs)]
-            self.layers = nn.Sequential(*self.layers)
-        else:
-            self.layers = nn.Identity()
-
+        # only for ablation
         if pos == 'ppeg':
             self.pos_embedding = PPEG(dim=mlp_dim,k=peg_k,bias=peg_bias,conv_1d=peg_1d)
         elif pos == 'sincos':
@@ -82,7 +159,10 @@ class RRTEncoder(nn.Module):
 
         self.pos_pos = pos_pos
 
-    def forward(self, x, no_pool=False,return_attn=False,no_norm=False):
+        if need_init:
+            self.apply(initialize_weights)
+
+    def forward(self, x):
         shape_len = 3
         # for N,C
         if len(x.shape) == 2:
@@ -93,71 +173,39 @@ class RRTEncoder(nn.Module):
             x = x.reshape(x.size(0),x.size(1),-1)
             x = x.transpose(1,2)
             shape_len = 4
+
         batch, num_patches, C = x.shape 
-        patch_idx = 0
-        if self.pos_pos == -2:
-            x = self.pos_embedding(x)
-        
-        # cls_token
-        if self.pool == 'cls_token':
-            cls_tokens = repeat(self.cls_token, '1 n d -> b n d', b = batch)
-            x = torch.cat((cls_tokens, x), dim=1)
-            patch_idx = 1
-
-        if self.pos_pos == -1:
-            x[:,patch_idx:,:] = self.pos_embedding(x[:,patch_idx:,:])
-
-        # translayer1
-        x = self.layer1(x)
+        x_shortcut = x
 
         # PEG/PPEG
-        if self.pos_pos == 0:
-            x[:,patch_idx:,:] = self.pos_embedding(x[:,patch_idx:,:])
+        if self.pos_pos == -1:
+            x = self.pos_embedding(x)
         
-        # translayer2
+        # R-MSA within region
         for i,layer in enumerate(self.layers.children()):
+            if i == 1 and self.pos_pos == 0:
+                x = self.pos_embedding(x)
             x = layer(x)
 
-        #---->cls_token
+        x = self.cr_msa(x)
+
+        if self.all_shortcut:
+            x = x+x_shortcut
+
         x = self.norm(x)
 
-        if no_pool:
-            if shape_len == 2:
-                x = x.squeeze(0)
-            elif shape_len == 4:
-                x = x.transpose(1,2)
-                x = x.reshape(batch,C,int(num_patches**0.5),int(num_patches**0.5))
-            return x
-            
-        if self.pool == 'cls_token':
-            logits = x[:,0,:]
-        elif self.pool == 'avg':
-            logits = x.mean(dim=1)
-        elif self.pool == 'attn':
-            if return_attn:
-                logits,a = self.pool_fn(x,return_attn=True,no_norm=no_norm)
-            else:
-                logits = self.pool_fn(x)
-
-        else:
-            logits = x
-
         if shape_len == 2:
-            logits = logits.squeeze(0)
+            x = x.squeeze(0)
         elif shape_len == 4:
-            logits = logits.transpose(1,2)
-            logits = logits.reshape(batch,C,int(num_patches**0.5),int(num_patches**0.5))
+            x = x.transpose(1,2)
+            x = x.reshape(batch,C,int(num_patches**0.5),int(num_patches**0.5))
+        return x
+    
+class RRTMIL(nn.Module):
+    def __init__(self, input_dim=1024,mlp_dim=512,act='relu',n_classes=2,dropout=0.25,pos_pos=0,pos='none',peg_k=7,attn='rmsa',pool='attn',region_num=8,n_layers=2,n_heads=8,drop_path=0.,da_act='relu',trans_dropout=0.1,ffn=False,ffn_act='gelu',mlp_ratio=4.,da_gated=False,da_bias=False,da_dropout=False,trans_dim=64,epeg=False,min_region_num=0,qkv_bias=True,**kwargs):
+        super(RRTMIL, self).__init__()
 
-        if return_attn:
-            return logits,a
-        else:
-            return logits
-
-class RRT(nn.Module):
-    def __init__(self, mlp_dim=512,act='relu',n_classes=2,dropout=0.25,pos_pos=0,pos='ppeg',peg_k=7,attn='trans',pool='attn',region_num=8,n_layers=2,n_heads=8,multi_scale=False,drop_path=0.,da_act='relu',trans_dropout=0.1,ffn=False,ffn_act='gelu',mlp_ratio=4.,da_gated=False,da_bias=False,da_dropout=False,trans_dim=64,n_cycle=1,epeg=False,min_region_num=0,qkv_bias=True,shift_size=False,**kwargs):
-        super(RRT, self).__init__()
-
-        self.patch_to_emb = [nn.Linear(1024, 512)]
+        self.patch_to_emb = [nn.Linear(input_dim, 512)]
 
         if act.lower() == 'relu':
             self.patch_to_emb += [nn.ReLU()]
@@ -168,8 +216,10 @@ class RRT(nn.Module):
 
         self.patch_to_emb = nn.Sequential(*self.patch_to_emb)
 
-        self.online_encoder = RRTEncoder(mlp_dim=mlp_dim,pos_pos=pos_pos,pos=pos,peg_k=peg_k,attn=attn,region_num=region_num,n_layers=n_layers,n_heads=n_heads,multi_scale=multi_scale,drop_path=drop_path,pool=pool,da_act=da_act,drop_out=trans_dropout,ffn=ffn,ffn_act=ffn_act,mlp_ratio=mlp_ratio,da_gated=da_gated,da_bias=da_bias,da_dropout=da_dropout,trans_dim=trans_dim,n_cycle=n_cycle,epeg=epeg,min_region_num=min_region_num,qkv_bias=qkv_bias,shift_size=shift_size,**kwargs)
+        self.online_encoder = RRTEncoder(mlp_dim=mlp_dim,pos_pos=pos_pos,pos=pos,peg_k=peg_k,attn=attn,region_num=region_num,n_layers=n_layers,n_heads=n_heads,drop_path=drop_path,drop_out=trans_dropout,ffn=ffn,ffn_act=ffn_act,mlp_ratio=mlp_ratio,trans_dim=trans_dim,epeg=epeg,min_region_num=min_region_num,qkv_bias=qkv_bias,**kwargs)
 
+        self.pool_fn = DAttention(self.online_encoder.final_dim,da_act,gated=da_gated,bias=da_bias,dropout=da_dropout) if pool == 'attn' else nn.AdaptiveAvgPool1d(1)
+        
         self.predictor = nn.Linear(self.online_encoder.final_dim,n_classes)
 
         self.apply(initialize_weights)
@@ -178,14 +228,15 @@ class RRT(nn.Module):
         x = self.patch_to_emb(x) # n*512
         x = self.dp(x)
         
-        ps = x.size(1)
-
-        # forward online network
-        if return_attn:
-            x,a = self.online_encoder(x,return_attn=True,no_norm=no_norm)
-        else:
-            x = self.online_encoder(x)
+        # feature re-embedding
+        x = self.online_encoder(x)
         
+        # feature aggregation
+        if return_attn:
+            x,a = self.pool_fn(x,return_attn=True,no_norm=no_norm)
+        else:
+            x = self.pool_fn(x)
+
         # prediction
         logits = self.predictor(x)
 
@@ -193,3 +244,29 @@ class RRT(nn.Module):
             return logits,a
         else:
             return logits
+        
+if __name__ == "__main__":
+    x = torch.rand(1,100,1024)
+    x_rrt = torch.rand(1,100,512)
+
+    # epeg_k，crmsa_k are the primary hyper-para, you can set crmsa_heads, all_shortcut and crmsa_mlp if you want.
+    # C16-R50: input_dim=1024,epeg_k=15,crmsa_k=1,crmsa_heads=8,all_shortcut=True
+    # C16-PLIP: input_dim=512,epeg_k=9,crmsa_k=3,crmsa_heads=8,all_shortcut=True
+    # TCGA-LUAD&LUSC-R50: input_dim=1024,epeg_k=21,crmsa_k=5,crmsa_heads=8
+    # TCGA-LUAD&LUSC-PLIP: input_dim=512,epeg_k=13,crmsa_k=3,crmsa_heads=1,all_shortcut=True,crmsa_mlp=True
+    # TCGA-BRCA-R50:input_dim=1024,epeg_k=17,crmsa_k=3,crmsa_heads=1
+    # TCGA-BRCA-PLIP: input_dim=512,epeg_k=15,crmsa_k=1,crmsa_heads=8,all_shortcut=True
+
+    # rrt+abmil
+    rrt_mil = RRTMIL(n_classes=2,epeg_k=15,crmsa_k=3)
+    x = rrt_mil(x)  # 1,N,D -> 1,C
+
+    # rrt. you should put the rrt_enc before aggregation module, after fc and dp
+    # x_rrt = fc(x_rrt) # 1,N,1024 -> 1,N,512
+    # x_rrt = dropout(x_rrt)
+    rrt = RRTEncoder(mlp_dim=512,epeg_k=15,crmsa_k=3) 
+    x_rrt = rrt(x_rrt) # 1,N,512 -> 1,N,512
+    # x_rrt = mil_model(x_rrt) # 1,N,512 -> 1,N,C
+
+    print(x.size())
+    print(x_rrt.size())
