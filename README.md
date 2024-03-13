@@ -15,7 +15,9 @@ To preprocess WSIs, we used [CLAM](https://github.com/mahmoodlab/CLAM/tree/maste
 Download the preprocessed patch features: [Baidu Cloud](https://pan.baidu.com/s/1mSzLJ_RVCJFQGe2lZAvEUA?pwd=2024).
 
 ## Plug R$`^2`$T into Your Model
-`epeg_k`，`crmsa_k` are the primary hyper-para, you can set `crmsa_heads`, `all_shortcut` and `crmsa_mlp` if you want.
+`epeg_k`，`crmsa_k` are the primary hyper-paras, you can set `crmsa_heads`, `all_shortcut` and `crmsa_mlp` if you want.
+
+`region_num` is the important hyper-para for GPU memory, and increasing it can significantly reduce GPU memory usage. Its default value is `8`, which takes up about `10GB` with an average sequence length of `9000`. I recommend changing this value to `16` or even `larger` if you want to apply it to **longer sequence** tasks such as **survival prediction**.
 ```shell
 from rrt import RRTEncoder 
 
