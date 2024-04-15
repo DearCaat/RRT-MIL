@@ -660,17 +660,17 @@ if __name__ == '__main__':
     parser.add_argument('--dropout', default=0.25, type=float, help='Dropout in the projection head')
     # Transformer
     parser.add_argument('--attn', default='rmsa', type=str, help='Inner attention')
-    parser.add_argument('--pool', default='cls_token', type=str, help='Classification pooling [cls_token, atten]')
-    parser.add_argument('--ffn', action='store_true', help='Feed-forward network')
+    parser.add_argument('--pool', default='attn', type=str, help='Classification poolinp. use abmil.')
+    parser.add_argument('--ffn', action='store_true', help='Feed-forward network. only for ablation')
     parser.add_argument('--n_trans_layers', default=2, type=int, help='Number of layer in the transformer')
     parser.add_argument('--mlp_ratio', default=4., type=int, help='Ratio of MLP in the FFN')
     parser.add_argument('--qkv_bias', action='store_false')
     parser.add_argument('--all_shortcut', action='store_true', help='x = x + rrt(x)')
     # R-MSA
     parser.add_argument('--region_attn', default='native', type=str, help='only for ablation')
-    parser.add_argument('--min_region_num', default=0, type=int, help='position of pos embed [-1,0]')
-    parser.add_argument('--region_num', default=8, type=int, help='Number of the region')
-    parser.add_argument('--trans_dim', default=64, type=int, help='Dim per head in the R-MSA')
+    parser.add_argument('--min_region_num', default=0, type=int, help='only for ablation')
+    parser.add_argument('--region_num', default=8, type=int, help='Number of the region. [8,12,16,...]')
+    parser.add_argument('--trans_dim', default=64, type=int, help='only for ablation')
     parser.add_argument('--n_heads', default=8, type=int, help='Number of head in the R-MSA')
     parser.add_argument('--trans_drop_out', default=0.1, type=float, help='Dropout in the R-MSA')
     parser.add_argument('--drop_path', default=0., type=float, help='Droppath in the R-MSA')
@@ -683,12 +683,12 @@ if __name__ == '__main__':
     parser.add_argument('--epeg', action='store_false', help='enable epeg')
     parser.add_argument('--epeg_bias', action='store_false', help='enable conv bias')
     parser.add_argument('--epeg_2d', action='store_true', help='enable 2d conv. only for ablation')
-    parser.add_argument('--epeg_k', default=15, type=int, help='position of pos embed [-1,0]')
+    parser.add_argument('--epeg_k', default=15, type=int, help='K of the EPEG. [9,15,21,...]')
     parser.add_argument('--epeg_type', default='attn', type=str, help='only for ablation')
     # CR-MSA
     parser.add_argument('--cr_msa', action='store_false', help='enable CR-MSA')
-    parser.add_argument('--crmsa_k', default=3, type=int, help='K of the CR-MSA')
-    parser.add_argument('--crmsa_heads', default=8, type=int, help='head of CR-MSA')
+    parser.add_argument('--crmsa_k', default=3, type=int, help='K of the CR-MSA. [1,3,5]')
+    parser.add_argument('--crmsa_heads', default=8, type=int, help='head of CR-MSA. [1,8,...]')
     parser.add_argument('--crmsa_mlp', action='store_true', help='mlp phi of CR-MSA?')
 
     # DAttention
