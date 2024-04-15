@@ -306,14 +306,14 @@ class CrossRegionAttntion(nn.Module):
         else:
             logits = torch.einsum("w p c, c n -> w p n", x_regions, self.phi).transpose(1,2) # nW*B, sW, region_size*region_size
 
-        dispatch_weights = logits.softmax(dim=-1)
-        combine_weights = logits.softmax(dim=1)
+        combine_weights = logits.softmax(dim=-1)
+        dispatch_weights = logits.softmax(dim=1)
 
         logits_min,_ = logits.min(dim=-1)
         logits_max,_ = logits.max(dim=-1)
-        dispatch_weights_1 = (logits - logits_min.unsqueeze(-1)) / (logits_max.unsqueeze(-1) - logits_min.unsqueeze(-1) + 1e-8)
+        dispatch_weights_mm = (logits - logits_min.unsqueeze(-1)) / (logits_max.unsqueeze(-1) - logits_min.unsqueeze(-1) + 1e-8)
 
-        attn_regions =  torch.einsum("w p c, w n p -> w n p c", x_regions,dispatch_weights).sum(dim=-2).transpose(0,1) # sW, nW, C
+        attn_regions =  torch.einsum("w p c, w n p -> w n p c", x_regions,combine_weights).sum(dim=-2).transpose(0,1) # sW, nW, C
 
         if return_attn:
             attn_regions,_attn = self.attn(attn_regions,return_attn)  # sW, nW, C
@@ -321,8 +321,8 @@ class CrossRegionAttntion(nn.Module):
         else:
             attn_regions = self.attn(attn_regions).transpose(0,1)  # nW, sW, C
 
-        attn_regions = torch.einsum("w n c, w n p -> w n p c", attn_regions, dispatch_weights_1) # nW, sW, region_size*region_size, C
-        attn_regions = torch.einsum("w n p c, w n p -> w n p c", attn_regions, combine_weights).sum(dim=1) # nW, region_size*region_size, C
+        attn_regions = torch.einsum("w n c, w n p -> w n p c", attn_regions, dispatch_weights_mm) # nW, sW, region_size*region_size, C
+        attn_regions = torch.einsum("w n p c, w n p -> w n p c", attn_regions, dispatch_weights).sum(dim=1) # nW, region_size*region_size, C
 
         # merge regions
         attn_regions = attn_regions.view(-1, region_size, region_size, C)
