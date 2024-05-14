@@ -256,7 +256,7 @@ class CrossRegionAttntion(nn.Module):
                     (self.dim, crmsa_k),
                 )
             )
-        nn.init.kaiming_uniform_(self.phi, a=math.sqrt(5))
+            nn.init.kaiming_uniform_(self.phi, a=math.sqrt(5))
 
     def padding(self,x):
         B, L, C = x.shape
