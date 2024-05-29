@@ -7,12 +7,47 @@ Official repo of **Feature Re-Embedding: Towards Foundation Model-Level Performa
 - Uploading codes about survival prediction
 
 ## News
+- Uploaded interim Survival code, and training scripts for the full task will be fused later.
 - Uploaded almost all codes, [docker](https://pan.baidu.com/s/1EN1JUbIjAl73NwHZF3YlPA?pwd=fek8), and [datasets](https://pan.baidu.com/s/1mSzLJ_RVCJFQGe2lZAvEUA?pwd=2024).
 
 ## Prepare Patch Features
 To preprocess WSIs, we used [CLAM](https://github.com/mahmoodlab/CLAM/tree/master#wsi-segmentation-and-patching). PLIP model and weight can be found in [this](https://github.com/PathologyFoundation/plip).
 
 Download the preprocessed patch features: [Baidu Cloud](https://pan.baidu.com/s/1mSzLJ_RVCJFQGe2lZAvEUA?pwd=2024).
+
+### Patching
+`--preset` [bwh_biopsy.csv](https://github.com/mahmoodlab/CLAM/blob/master/presets/bwh_biopsy.csv) for Camlyon (*It's the preset parameters officially provided by CLAM*), `--preset` [preprocess_tcga_nsclc.csv](dataset_csv/preprocess_tcga_nsclc.csv) for TCGA-NSCLS (*It's the customized parameters*), `--preset` [tcga.csv](https://github.com/mahmoodlab/CLAM/blob/master/presets/tcga.csv) for other TCGA-BRCA (*It's the preset parameters officially provided by CLAM*)
+```shell
+# for Camlyon
+python create_patches_fp.py --source DATA_DIRECTORY --save_dir RESULTS_DIRECTORY --patch_size 512 \
+--step_size 512 --preset bwh_biopsy.csv --seg --patch
+# for TCGA-NSCLC
+python create_patches_fp.py --source DATA_DIRECTORY --save_dir RESULTS_DIRECTORY --patch_size 512 \
+--step_size 512 --preset preprocess_tcga_nsclc.csv --seg --patch
+```
+
+### Feature Extraction
+Some code snippets about PLIP feature are shown below:
+
+`extract_features_fp.py`:
+```
+model = PLIP()
+n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
+mean, std = (0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711)
+eval_transforms = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean = mean, std = std)])
+```
+
+`models/plip.py`
+```
+from transformers import CLIPVisionModelWithProjection
+
+class PLIP(torch.nn.Module):
+    def __init__(self):
+        super(PLIPM,self).__init__()
+        self.model = model = CLIPVisionModelWithProjection.from_pretrained("vinid/plip")
+    def forward(self, input):
+        return self.model(batch_input).image_embeds
+```
 
 ## Plug R$`^2`$T into Your Model
 `epeg_k`，`crmsa_k` are the primary hyper-paras, you can set `crmsa_mlp`, `all_shortcut` if you want.
@@ -77,6 +112,17 @@ python3 main.py --project=$PROJECT_NAME --datasets=tcga \
 --model=rrtmil --pool=attn --n_trans_layers=2 --da_act=tanh --title=nsclc_plip_rrtmil \
 --all_shortcut --crmsa_mlp --epeg_k=13 --crmsa_k=3 --crmsa_heads=1 \
 --input_dim=512 --seed=2021
+```
+
+### Survival Prediction
+`study` = `{BLCA LUAD LUSC}`, `feat` = `{resnet50 plip}`
+```shell
+CUDA_VISIBLE_DEVICES=3 python ./Surviva/main.py --model RRTMIL \
+                                      --excel_file ./csv/${study}_Splits.csv \
+                                      --num_epoch 30 \
+                                      --batch_size 1 \
+                                      --folder $feat
+
 ```
 
 ## Train R$`^2`$T + more MILs
