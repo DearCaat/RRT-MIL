@@ -115,13 +115,13 @@ python3 main.py --project=$PROJECT_NAME --datasets=tcga \
 ```
 
 ### Survival Prediction
-`study` = `{BLCA LUAD LUSC}`, `feat` = `{resnet50 plip}`
+`study` = `{BLCA LUAD LUSC}`, `feat` = `{resnet50 plip}`. It is better to perform a grid search for the hyperparameters `crmsa_k={1,3,5}` and `epeg_k={9,15,21}`.
 ```shell
-CUDA_VISIBLE_DEVICES=3 python ./Surviva/main.py --model RRTMIL \
-                                      --excel_file ./csv/${study}_Splits.csv \
-                                      --num_epoch 30 \
-                                      --batch_size 1 \
-                                      --folder $feat
+python ./Surviva/main.py --model RRTMIL \
+                         --excel_file ./csv/${study}_Splits.csv \
+                         --num_epoch 30 \
+                         --epeg_k 15 crmsa_k 3\
+                         --folder $feat
 
 ```
 
