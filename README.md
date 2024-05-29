@@ -1,6 +1,10 @@
 # R$`^2`$T-MIL (Updating)
 Official repo of **Feature Re-Embedding: Towards Foundation Model-Level Performance in Computational Pathology**, CVPR 2024. [[arXiv]](https://arxiv.org/abs/2402.17228)
 
+<p align = "center">
+<img src="./doc/rrt.png" width="60%"/>
+</p>
+
 ## TODO
 - Improving README document
 - Uploading DOCKERFILE
