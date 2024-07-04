@@ -140,12 +140,12 @@ python3 main.py --project=$PROJECT_NAME --datasets=tcga --tcga_sub=brca \
 
 ## Citing R$`^2`$T-MIL
 ```
-@misc{tang2024feature,
-      title={Feature Re-Embedding: Towards Foundation Model-Level Performance in Computational Pathology}, 
-      author={Wenhao Tang and Fengtao Zhou and Sheng Huang and Xiang Zhu and Yi Zhang and Bo Liu},
-      year={2024},
-      eprint={2402.17228},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV}
+@InProceedings{tang2024feature,
+    author    = {Tang, Wenhao and Zhou, Fengtao and Huang, Sheng and Zhu, Xiang and Zhang, Yi and Liu, Bo},
+    title     = {Feature Re-Embedding: Towards Foundation Model-Level Performance in Computational Pathology},
+    booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+    month     = {June},
+    year      = {2024},
+    pages     = {11343-11352}
 }
 ```
