@@ -6,9 +6,10 @@ Official repo of **Feature Re-Embedding: Towards Foundation Model-Level Performa
 </p>
 
 ## TODO
+- Merge training scripts for the full task
 - Improving README document
 - Uploading DOCKERFILE
-- Uploading codes about survival prediction
+- ~~Uploading codes about survival prediction~~
 
 ## News
 - Uploaded interim Survival code, and training scripts for the full task will be fused later.
