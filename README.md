@@ -21,7 +21,7 @@ To preprocess WSIs, we used [CLAM](https://github.com/mahmoodlab/CLAM/tree/maste
 Download the preprocessed patch features: [Baidu Cloud](https://pan.baidu.com/s/1mSzLJ_RVCJFQGe2lZAvEUA?pwd=2024).
 
 ### Patching
-`--preset` [bwh_biopsy.csv](https://github.com/mahmoodlab/CLAM/blob/master/presets/bwh_biopsy.csv) for Camlyon (*It's the preset parameters officially provided by CLAM*), `--preset` [preprocess_tcga_nsclc.csv](dataset_csv/preprocess_tcga_nsclc.csv) for TCGA-NSCLS (*It's the customized parameters*), `--preset` [tcga.csv](https://github.com/mahmoodlab/CLAM/blob/master/presets/tcga.csv) for other TCGA-BRCA (*It's the preset parameters officially provided by CLAM*)
+`--preset` [bwh_biopsy.csv](https://github.com/mahmoodlab/CLAM/blob/master/presets/bwh_biopsy.csv) for Camlyon (*It's the preset parameters officially provided by CLAM*), `--preset` [preprocess_tcga_nsclc.csv](https://github.com/DearCaat/MHIM-MIL/blob/master/dataset_csv/preprocess_tcga_nsclc.csv) for TCGA-NSCLS (*It's the customized parameters*), `--preset` [tcga.csv](https://github.com/mahmoodlab/CLAM/blob/master/presets/tcga.csv) for other TCGA-BRCA (*It's the preset parameters officially provided by CLAM*)
 ```shell
 # for Camlyon
 python create_patches_fp.py --source DATA_DIRECTORY --save_dir RESULTS_DIRECTORY --patch_size 512 \
