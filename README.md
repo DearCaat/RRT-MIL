@@ -12,6 +12,7 @@ Official repo of **Feature Re-Embedding: Towards Foundation Model-Level Performa
 - ~~Uploading codes about survival prediction~~
 
 ## News
+- We propose **fully end-to-end** trained computational pathology to fundamentally address the feature adaptation problem. [arXiv](https://arxiv.org/abs/2506.02408), [Github](https://github.com/DearCaat/E2E-WSI-ABMILX).
 - Uploaded interim Survival code, and training scripts for the full task will be fused later.
 - Uploaded almost all codes, [docker](https://pan.baidu.com/s/1EN1JUbIjAl73NwHZF3YlPA?pwd=fek8), and [datasets](https://pan.baidu.com/s/1mSzLJ_RVCJFQGe2lZAvEUA?pwd=2024).
 
