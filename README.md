@@ -1,15 +1,15 @@
-# R$`^2`$T-MIL (Updating)
+# R$`^2`$T-MIL
 Official repo of **Feature Re-Embedding: Towards Foundation Model-Level Performance in Computational Pathology**, CVPR 2024. [[arXiv]](https://arxiv.org/abs/2402.17228)
 
 <p align = "center">
 <img src="./doc/rrt.png" width="60%"/>
 </p>
 
-## TODO
+<!-- ## TODO
 - Merge training scripts for the full task
 - Improving README document
 - Uploading DOCKERFILE
-- ~~Uploading codes about survival prediction~~
+- ~~Uploading codes about survival prediction~~ -->
 
 ## News
 - We propose **fully end-to-end** trained computational pathology to fundamentally address the feature adaptation problem. [arXiv](https://arxiv.org/abs/2506.02408), [Github](https://github.com/DearCaat/E2E-WSI-ABMILX).
