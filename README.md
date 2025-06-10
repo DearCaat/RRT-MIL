@@ -19,7 +19,7 @@ Official repo of **Feature Re-Embedding: Towards Foundation Model-Level Performa
 ## Prepare Patch Features
 To preprocess WSIs, we used [CLAM](https://github.com/mahmoodlab/CLAM/tree/master#wsi-segmentation-and-patching). PLIP model and weight can be found in [this](https://github.com/PathologyFoundation/plip).
 
-Download the preprocessed patch features: [Baidu Cloud](https://pan.baidu.com/s/1mSzLJ_RVCJFQGe2lZAvEUA?pwd=2024).
+Download the preprocessed patch features: [Baidu Cloud](https://pan.baidu.com/s/1mSzLJ_RVCJFQGe2lZAvEUA?pwd=2024). If you wanto match the `.h5` and `.pt` (e.g., get the coordinate), downloading [this](https://pan.baidu.com/s/1w2JsUFRkqaQrE-6w0C6qPQ?pwd=5gf4).
 
 ### Patching
 `--preset` [bwh_biopsy.csv](https://github.com/mahmoodlab/CLAM/blob/master/presets/bwh_biopsy.csv) for Camlyon (*It's the preset parameters officially provided by CLAM*), `--preset` [preprocess_tcga_nsclc.csv](https://github.com/DearCaat/MHIM-MIL/blob/master/dataset_csv/preprocess_tcga_nsclc.csv) for TCGA-NSCLS (*It's the customized parameters*), `--preset` [tcga.csv](https://github.com/mahmoodlab/CLAM/blob/master/presets/tcga.csv) for other TCGA-BRCA (*It's the preset parameters officially provided by CLAM*)
